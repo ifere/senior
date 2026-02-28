@@ -83,4 +83,86 @@ mod tests {
         assert_eq!(files[0].path, "a.ts");
         assert_eq!(files[1].path, "b.ts");
     }
+
+    #[test]
+    fn test_parse_diff_new_file_only_additions() {
+        // New file: all lines are additions, no removals.
+        let diff = "diff --git a/new.ts b/new.ts\n--- /dev/null\n+++ b/new.ts\n@@ -0,0 +1,3 @@\n+line one\n+line two\n+line three\n";
+        let files = parse_diff(diff);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].added_lines, 3);
+        assert_eq!(files[0].removed_lines, 0);
+    }
+
+    #[test]
+    fn test_parse_diff_deleted_file_only_removals() {
+        // Deleted file: all lines are removals, no additions.
+        let diff = "diff --git a/gone.ts b/gone.ts\n--- a/gone.ts\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-remove me\n-and me\n";
+        let files = parse_diff(diff);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].added_lines, 0);
+        assert_eq!(files[0].removed_lines, 2);
+    }
+
+    #[test]
+    fn test_parse_diff_deep_nested_path() {
+        let diff = "diff --git a/src/utils/helpers/format.ts b/src/utils/helpers/format.ts\n--- a/src/utils/helpers/format.ts\n+++ b/src/utils/helpers/format.ts\n@@ -1 +1 @@\n-old\n+new\n";
+        let files = parse_diff(diff);
+        assert_eq!(files[0].path, "src/utils/helpers/format.ts");
+    }
+
+    #[test]
+    fn test_parse_diff_context_lines_not_counted() {
+        // Lines starting with a space are context — must not affect add/remove counts.
+        let diff = "diff --git a/foo.rs b/foo.rs\n--- a/foo.rs\n+++ b/foo.rs\n@@ -1,4 +1,4 @@\n unchanged line\n another unchanged\n-removed\n+added\n";
+        let files = parse_diff(diff);
+        assert_eq!(files[0].added_lines, 1);
+        assert_eq!(files[0].removed_lines, 1);
+    }
+
+    #[test]
+    fn test_parse_diff_multiple_hunks_same_file() {
+        // Two @@ sections in one file — both hunks collected, counts accumulate.
+        let diff = concat!(
+            "diff --git a/multi.ts b/multi.ts\n",
+            "--- a/multi.ts\n+++ b/multi.ts\n",
+            "@@ -1,3 +1,3 @@\n-a\n+b\n",
+            "@@ -10,3 +10,3 @@\n-c\n+d\n-e\n",
+        );
+        let files = parse_diff(diff);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].added_lines, 2);
+        assert_eq!(files[0].removed_lines, 3);
+        assert_eq!(files[0].hunks.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_diff_rust_file_extension() {
+        let diff = "diff --git a/daemon/src/main.rs b/daemon/src/main.rs\n--- a/daemon/src/main.rs\n+++ b/daemon/src/main.rs\n@@ -1 +1 @@\n-old\n+new\n";
+        let files = parse_diff(diff);
+        assert_eq!(files[0].path, "daemon/src/main.rs");
+    }
+
+    #[test]
+    fn test_parse_diff_preserves_file_order() {
+        let diff = concat!(
+            "diff --git a/z.ts b/z.ts\n@@ -1 +1 @@\n+x\n",
+            "diff --git a/a.ts b/a.ts\n@@ -1 +1 @@\n+x\n",
+            "diff --git a/m.ts b/m.ts\n@@ -1 +1 @@\n+x\n",
+        );
+        let files = parse_diff(diff);
+        assert_eq!(files[0].path, "z.ts");
+        assert_eq!(files[1].path, "a.ts");
+        assert_eq!(files[2].path, "m.ts");
+    }
+
+    #[test]
+    fn test_parse_diff_whitespace_only_diff() {
+        // A diff where every changed line is a space (indentation) change.
+        // Those lines start with '-' or '+' so they are counted.
+        let diff = "diff --git a/indent.ts b/indent.ts\n--- a/indent.ts\n+++ b/indent.ts\n@@ -1 +1 @@\n-    old indent\n+  new indent\n";
+        let files = parse_diff(diff);
+        assert_eq!(files[0].added_lines, 1);
+        assert_eq!(files[0].removed_lines, 1);
+    }
 }

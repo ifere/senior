@@ -4,7 +4,7 @@ import { DaemonClient } from './daemon/client';
 import { DaemonManager } from './daemon/manager';
 import { ImpactPanel } from './ui/panel';
 
-function parseFilesFromDiff(diff: string): string[] {
+export function parseFilesFromDiff(diff: string): string[] {
     return diff
         .split('\n')
         .filter(line => line.startsWith('diff --git '))

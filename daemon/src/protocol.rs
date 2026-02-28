@@ -84,4 +84,86 @@ mod tests {
         let json = serde_json::to_string(&resp).unwrap();
         assert!(json.contains("pong"));
     }
+
+    #[test]
+    fn test_serialize_error_response() {
+        let resp = Response::Error { message: "something broke".to_string() };
+        let json = serde_json::to_string(&resp).unwrap();
+        let val: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(val["type"], "error");
+        assert_eq!(val["payload"]["message"], "something broke");
+    }
+
+    #[test]
+    fn test_serialize_analysis_result() {
+        let result = Response::AnalysisResult(super::AnalysisResult {
+            summary: vec!["changed auth flow".to_string()],
+            risk_level: "high".to_string(),
+            risk_reasons: vec!["touches tokens".to_string()],
+            impacted_files: vec![],
+            impacted_symbols: vec![],
+            suggested_actions: vec![],
+            confidence: 0.9,
+        });
+        let json = serde_json::to_string(&result).unwrap();
+        let val: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(val["type"], "analysis_result");
+        assert_eq!(val["payload"]["risk_level"], "high");
+        assert_eq!(val["payload"]["confidence"], 0.9);
+    }
+
+    #[test]
+    fn test_deserialize_invalid_json_returns_error() {
+        let bad = "not json at all";
+        let result = serde_json::from_str::<Request>(bad);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_deserialize_unknown_type_returns_error() {
+        // Valid JSON but type field is unrecognised.
+        let bad = r#"{"type":"unknown_command","payload":{}}"#;
+        let result = serde_json::from_str::<Request>(bad);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_analyze_diff_payload_all_fields_accessible() {
+        let raw = r#"{"type":"analyze_diff","payload":{"diff":"the diff","files_touched":["a.ts","b.ts"],"active_file":"a.ts","trigger":"save"}}"#;
+        let req: Request = serde_json::from_str(raw).unwrap();
+        if let Request::AnalyzeDiff(payload) = req {
+            assert_eq!(payload.diff, "the diff");
+            assert_eq!(payload.files_touched, vec!["a.ts", "b.ts"]);
+            assert_eq!(payload.active_file, "a.ts");
+            assert_eq!(payload.trigger, "save");
+        } else {
+            panic!("expected AnalyzeDiff");
+        }
+    }
+
+    #[test]
+    fn test_impacted_file_serializes_correctly() {
+        let f = super::ImpactedFile {
+            path: "src/auth.rs".to_string(),
+            score: 0.9,
+            why: vec!["big change".to_string()],
+        };
+        let json = serde_json::to_string(&f).unwrap();
+        let val: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(val["path"], "src/auth.rs");
+        assert_eq!(val["score"], 0.9);
+        assert_eq!(val["why"][0], "big change");
+    }
+
+    #[test]
+    fn test_suggested_action_serializes_correctly() {
+        let action = super::SuggestedAction {
+            label: "Add tests".to_string(),
+            explanation: "This path has no coverage".to_string(),
+        };
+        let json = serde_json::to_string(&action).unwrap();
+        let val: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(val["label"], "Add tests");
+        assert_eq!(val["explanation"], "This path has no coverage");
+    }
 }

@@ -143,4 +143,85 @@ mod tests {
         assert_eq!(normalize_score(25), 0.6);
         assert_eq!(normalize_score(100), 0.9);
     }
+
+    // --- normalize_score boundary coverage ---
+
+    #[test]
+    fn test_normalize_score_zero() {
+        assert_eq!(normalize_score(0), 0.3);
+    }
+
+    #[test]
+    fn test_normalize_score_boundary_ten() {
+        // 10 is the last value in the 0..=10 arm.
+        assert_eq!(normalize_score(10), 0.3);
+    }
+
+    #[test]
+    fn test_normalize_score_boundary_eleven() {
+        // 11 is the first value in the 11..=50 arm.
+        assert_eq!(normalize_score(11), 0.6);
+    }
+
+    #[test]
+    fn test_normalize_score_boundary_fifty() {
+        assert_eq!(normalize_score(50), 0.6);
+    }
+
+    #[test]
+    fn test_normalize_score_boundary_fifty_one() {
+        assert_eq!(normalize_score(51), 0.9);
+    }
+
+    // --- extract_json ---
+
+    #[test]
+    fn test_extract_json_returns_raw_when_no_braces() {
+        // No '{' → the function must return the full input unchanged.
+        let raw = "no json here";
+        assert_eq!(extract_json(raw), raw);
+    }
+
+    #[test]
+    fn test_extract_json_opening_brace_but_no_closing() {
+        // Has '{' but no '}' → return full input.
+        let raw = "{ oops no close";
+        assert_eq!(extract_json(raw), raw);
+    }
+
+    #[test]
+    fn test_extract_json_with_nested_braces() {
+        // Outermost braces should be selected, not inner ones.
+        let raw = r#"prefix {"outer": {"inner": 1}} suffix"#;
+        assert_eq!(extract_json(raw), r#"{"outer": {"inner": 1}}"#);
+    }
+
+    #[test]
+    fn test_extract_json_bare_object() {
+        // No surrounding noise — should return as-is.
+        let raw = r#"{"key":"val"}"#;
+        assert_eq!(extract_json(raw), r#"{"key":"val"}"#);
+    }
+
+    // --- build_prompt ---
+
+    #[test]
+    fn test_build_prompt_with_no_files() {
+        // Empty file list — prompt should still contain the diff.
+        let files: Vec<DiffFile> = vec![];
+        let prompt = build_prompt(&files, "diff content here");
+        assert!(prompt.contains("diff content here"));
+        assert!(prompt.contains("Files changed:"));
+    }
+
+    #[test]
+    fn test_build_prompt_with_multiple_files() {
+        let files = vec![
+            DiffFile { path: "a.ts".into(), added_lines: 1, removed_lines: 0, hunks: vec![] },
+            DiffFile { path: "b.rs".into(), added_lines: 5, removed_lines: 3, hunks: vec![] },
+        ];
+        let prompt = build_prompt(&files, "diff");
+        assert!(prompt.contains("a.ts (+1 -0)"));
+        assert!(prompt.contains("b.rs (+5 -3)"));
+    }
 }
