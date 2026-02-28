@@ -56,8 +56,11 @@ export function registerCommands(
     manager: DaemonManager,
     panel: ImpactPanel
 ) {
+    let isAnalyzing = false;
+
     context.subscriptions.push(
         vscode.commands.registerCommand('senior.explainLastChange', async () => {
+            if (isAnalyzing) return;
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders) {
                 vscode.window.showErrorMessage('senior: No workspace open.');
@@ -67,6 +70,7 @@ export function registerCommands(
                 const started = await manager.start();
                 if (!started) return;
             }
+            isAnalyzing = true;
             const root = workspaceFolders[0].uri.fsPath;
             panel.show();
             panel.setLoading(true);
@@ -92,6 +96,7 @@ export function registerCommands(
             } catch (err: any) {
                 panel.setError(err.message);
             } finally {
+                isAnalyzing = false;
                 panel.setLoading(false);
             }
         }),
