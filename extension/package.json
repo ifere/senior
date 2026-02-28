@@ -1,4 +1,5 @@
 {
+  "publisher": "callmeout",
   "name": "callmeout",
   "displayName": "callmeout — Voice Companion",
   "description": "AI pair programmer: explains diffs, blast radius, and fix paths",

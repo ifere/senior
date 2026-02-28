@@ -1,4 +1,4 @@
-.PHONY: all daemon extension clean
+.PHONY: all daemon daemon-dev extension clean
 
 all: daemon extension
 
