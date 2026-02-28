@@ -1,8 +1,10 @@
 mod protocol;
+mod store;
 
 use anyhow::Result;
 use protocol::{AnalysisResult, ImpactedFile, Request, Response, SuggestedAction};
 use std::path::Path;
+use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tracing::{error, info};
@@ -23,17 +25,20 @@ async fn main() -> Result<()> {
     let listener = UnixListener::bind(SOCKET_PATH)?;
     info!("callmeout daemon listening on {}", SOCKET_PATH);
 
+    let audit = Arc::new(store::AuditLog::open("/tmp/callmeout-audit.db")?);
+
     loop {
         let (stream, _) = listener.accept().await?;
+        let audit = audit.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_connection(stream).await {
+            if let Err(e) = handle_connection(stream, audit).await {
                 error!("connection error: {}", e);
             }
         });
     }
 }
 
-async fn handle_connection(stream: UnixStream) -> Result<()> {
+async fn handle_connection(stream: UnixStream, audit: Arc<store::AuditLog>) -> Result<()> {
     let (reader, mut writer) = tokio::io::split(stream);
     let mut reader = BufReader::new(reader);
     let mut line = String::new();
@@ -53,6 +58,7 @@ async fn handle_connection(stream: UnixStream) -> Result<()> {
         let response = match serde_json::from_str::<Request>(trimmed) {
             Ok(Request::Ping) => Response::Pong,
             Ok(Request::AnalyzeDiff(payload)) => {
+                let _ = audit.log("analyze_diff", &serde_json::to_string(&payload.files_touched).unwrap_or_default());
                 // Stub: returns placeholder until LLM is wired in Task 5
                 Response::AnalysisResult(AnalysisResult {
                     summary: vec![
