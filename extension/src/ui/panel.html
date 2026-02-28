@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-NONCE';"/>
+<title>callmeout Impact Panel</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-foreground);
+    background: var(--vscode-editor-background);
+    padding: 16px;
+    line-height: 1.5;
+  }
+  h2 { font-size: 1em; font-weight: 600; margin-bottom: 8px; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.05em; }
+  .section { margin-bottom: 20px; }
+  .risk-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.85em;
+    margin-bottom: 8px;
+  }
+  .risk-low { background: #1a3a1a; color: #4ec94e; }
+  .risk-med { background: #3a2a00; color: #e6a800; }
+  .risk-high { background: #3a1010; color: #e64040; }
+  ul { list-style: none; padding: 0; }
+  li { padding: 4px 0; border-bottom: 1px solid var(--vscode-widget-border); }
+  li:last-child { border-bottom: none; }
+  .file-link {
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 0.9em;
+  }
+  .file-link:hover { text-decoration: underline; }
+  .why { color: var(--vscode-descriptionForeground); font-size: 0.8em; margin-left: 8px; }
+  .action-btn {
+    display: block;
+    width: 100%;
+    padding: 6px 12px;
+    margin: 4px 0;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.9em;
+  }
+  .action-btn:hover { background: var(--vscode-button-hoverBackground); }
+  .action-explanation { font-size: 0.8em; color: var(--vscode-descriptionForeground); margin: 2px 0 6px 4px; }
+  .loading { opacity: 0.5; font-style: italic; }
+  .error { color: var(--vscode-errorForeground); }
+  .bullet { padding: 3px 0; }
+  .bullet::before { content: "→ "; opacity: 0.5; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="loading">Waiting for changes...</div>
+</div>
+<script nonce="NONCE">
+  const vscode = acquireVsCodeApi();
+
+  window.addEventListener('message', event => {
+    const msg = event.data;
+    const app = document.getElementById('app');
+
+    if (msg.type === 'loading') {
+      app.innerHTML = '<div class="loading">Analyzing changes...</div>';
+      return;
+    }
+    if (msg.type === 'error') {
+      app.innerHTML = '<div class="error">Error: ' + escHtml(msg.message) + '</div>';
+      return;
+    }
+    if (msg.type === 'result') {
+      const r = msg.result;
+      const riskClass = r.risk_level === 'high' ? 'risk-high' : r.risk_level === 'med' ? 'risk-med' : 'risk-low';
+
+      const summaryHtml = r.summary.map(s => '<div class="bullet">' + escHtml(s) + '</div>').join('');
+
+      const riskReasonsHtml = r.risk_reasons.length
+        ? '<ul>' + r.risk_reasons.map(rr => '<li>' + escHtml(rr) + '</li>').join('') + '</ul>'
+        : '';
+
+      const filesHtml = r.impacted_files.map(f =>
+        '<li><span class="file-link" onclick="openFile(\'' + escHtml(f.path) + '\')">' + escHtml(f.path) + '</span>' +
+        '<span class="why">' + f.why.map(w => escHtml(w)).join(', ') + '</span></li>'
+      ).join('');
+
+      const actionsHtml = r.suggested_actions.map(a =>
+        '<div><button class="action-btn">' + escHtml(a.label) + '</button>' +
+        '<div class="action-explanation">' + escHtml(a.explanation) + '</div></div>'
+      ).join('');
+
+      app.innerHTML =
+        '<div class="section"><h2>Summary</h2>' + summaryHtml + '</div>' +
+        '<div class="section"><h2>Risk</h2><span class="risk-badge ' + riskClass + '">' + r.risk_level.toUpperCase() + '</span>' + riskReasonsHtml + '</div>' +
+        (r.impacted_files.length ? '<div class="section"><h2>Impacted Files</h2><ul>' + filesHtml + '</ul></div>' : '') +
+        (r.suggested_actions.length ? '<div class="section"><h2>Suggested Actions</h2>' + actionsHtml + '</div>' : '');
+    }
+  });
+
+  function openFile(path) {
+    vscode.postMessage({ type: 'openFile', path });
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+</script>
+</body>
+</html>
