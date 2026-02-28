@@ -13,3 +13,10 @@ extension/*.vsix
 
 # OS
 .DS_Store
+
+# Local dev artifacts
+.claude/
+docs/
+firebase-debug.log
+app
+main.cpp

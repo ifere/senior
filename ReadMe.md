@@ -1,92 +1,81 @@
 # callmeout
 
-AI pair programmer for Cursor. Saves to file → instant blast-radius analysis → Impact Panel shows what changed, what's at risk, and what to do next.
+save a file → know exactly what broke and why, before you even run the tests.
 
-## What it does
+locally. no cloud. instant.
 
-- **Explain Last Change** — on every save (or manually), diffs your repo and asks the local LLM: "what changed and what does it affect?"
-- **Impact Panel** — shows summary bullets, risk level (low/med/high), impacted files (click to open), and suggested next actions
-- **Local-first** — all inference runs on-device via [Cactus](https://cactuscompute.com/). No data leaves your machine.
+## what it does
 
-## Architecture
+every time you hit save, it diffs your repo and asks a local LLM what changed and what it probably affects. results show up in a panel next to your editor — summary, risk level, which files are at risk, what to look at next.
+
+you can also trigger it manually whenever.
+
+## stack
+
+- **TypeScript** — VS Code / Cursor extension (thin client, no logic)
+- **Rust + Tokio** — async daemon, does all the heavy lifting
+- **Cactus** — on-device LLM inference via C FFI (YC-backed, fast)
+- **SQLite** — append-only audit log of every analysis
+- **Unix socket** — NDJSON between extension and daemon
 
 ```
-Extension (TypeScript)  ←→  Daemon (Rust)
-                               ├── Cactus LLM (local FFI)
-                               ├── Diff parser (tree-sitter ready)
-                               └── SQLite audit log
+Cursor/VS Code (TS)  ←→  Daemon (Rust)
+                            ├── Cactus LLM (local FFI)
+                            ├── Diff parser
+                            └── SQLite audit log
 ```
 
-Communication: NDJSON over Unix socket (`/tmp/callmeout.sock`).
+## setup
 
-## Setup
+### 1. get cactus
 
-### 1. Install Cactus
+you need the cactus SDK built locally and a model downloaded.
+see [cactuscompute.com](https://cactuscompute.com) for install instructions.
 
-```bash
-# Clone and set up Cactus
-git clone https://github.com/cactus-compute/cactus /Users/chilly/dev/cactus
-cd /Users/chilly/dev/cactus && source ./setup
+once you have the dylib, note the path — you'll need it in step 2.
 
-# Download a model
-cactus download LiquidAI/LFM2.5-1.2B-Instruct
-# or use the bundled model: weights/functiongemma-270m-it
-```
-
-### 2. Build the daemon
+### 2. build the daemon
 
 ```bash
 cd daemon
-cargo build --release
-```
-
-The daemon links against `libcactus.dylib`. Override the library path with:
-```bash
 CACTUS_LIB_DIR=/path/to/cactus/build cargo build --release
 ```
 
-### 3. Install the extension
+set `CACTUS_MODEL_PATH` to your model weights directory (or configure it in VS Code settings and let the extension pass it through).
+
+### 3. install the extension
 
 ```bash
 cd extension
 npm install
-npm run package   # produces callmeout-0.0.1.vsix
+npm run package
 ```
 
-Install in Cursor: Extensions panel → `...` → Install from VSIX → select `callmeout-0.0.1.vsix`
+then in Cursor: Extensions → `...` → Install from VSIX → pick `callmeout-0.0.1.vsix`
 
-### 4. Configure
+### 4. settings
 
-In VS Code/Cursor settings (`Cmd+,` → search "callmeout"):
+`Cmd+,` → search callmeout:
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `callmeout.daemonPath` | auto | Path to daemon binary (defaults to `daemon/target/release/callmeout-daemon` in workspace) |
-| `callmeout.modelPath` | — | Path to model weights dir (used for `CACTUS_MODEL_PATH` env var when starting daemon) |
+- `callmeout.daemonPath` — path to daemon binary (defaults to `daemon/target/release/callmeout-daemon` in workspace root)
+- `callmeout.modelPath` — model weights dir (passed as `CACTUS_MODEL_PATH` when daemon starts)
 
-### 5. Run
+### 5. run it
 
-The extension automatically:
-1. Starts the daemon on activation
-2. Analyzes diffs on every file save (1.5s debounce)
-3. Shows the Impact Panel beside your editor
+extension starts the daemon automatically on activation. saves trigger analysis with a 1.5s debounce. panel opens beside your editor.
 
-Or trigger manually: `Cmd+Shift+P` → `callmeout: Explain Last Change`
+manual: `Cmd+Shift+P` → `callmeout: Explain Last Change`
 
-## Development
+## dev
 
 ```bash
-# Run all daemon tests
-cd daemon && cargo test
-
-# Watch extension TypeScript
-cd extension && npm run watch
-
-# Build both
-make all
+cd daemon && cargo test          # run daemon tests
+cd extension && npm run watch    # watch TS
+make all                         # build both
 ```
 
-## Roadmap
+## roadmap
 
-- **v0.5** — Push-to-talk voice: Cactus STT → spoken summary via macOS `say`
-- **v1** — `apply_patch` confirmation flow, evidence citations, full audit log panel
+**v0.5** — push-to-talk: Cactus STT → spoken blast-radius summary → `say`
+
+**v1** — apply patch confirmation loop, evidence citations in the panel, full audit log viewer
