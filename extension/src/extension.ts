@@ -20,7 +20,7 @@ export async function activate(context: vscode.ExtensionContext) {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(async () => {
                 if (!manager.isRunning()) return;
-                await vscode.commands.executeCommand('callmeout.explainLastChange');
+                await vscode.commands.executeCommand('senior.explainLastChange');
             }, 1500);
         }),
         // Clear pending debounce when extension deactivates
@@ -31,9 +31,9 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.StatusBarAlignment.Right,
         100
     );
-    statusBar.text = '$(radio-tower) callmeout';
-    statusBar.tooltip = 'callmeout — click to explain last change';
-    statusBar.command = 'callmeout.explainLastChange';
+    statusBar.text = '$(radio-tower) Senior';
+    statusBar.tooltip = 'Senior — click to explain last change';
+    statusBar.command = 'senior.explainLastChange';
     statusBar.show();
     context.subscriptions.push(statusBar);
 }

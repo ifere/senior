@@ -57,10 +57,10 @@ export function registerCommands(
     panel: ImpactPanel
 ) {
     context.subscriptions.push(
-        vscode.commands.registerCommand('callmeout.explainLastChange', async () => {
+        vscode.commands.registerCommand('senior.explainLastChange', async () => {
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders) {
-                vscode.window.showErrorMessage('callmeout: No workspace open.');
+                vscode.window.showErrorMessage('senior: No workspace open.');
                 return;
             }
             if (!manager.isRunning()) {
@@ -96,7 +96,7 @@ export function registerCommands(
             }
         }),
 
-        vscode.commands.registerCommand('callmeout.showPanel', () => {
+        vscode.commands.registerCommand('senior.showPanel', () => {
             panel.show();
         })
     );

@@ -1,4 +1,4 @@
-# callmeout
+# Senior
 
 save a file → know exactly what broke and why, before you even run the tests.
 
@@ -51,20 +51,20 @@ npm install
 npm run package
 ```
 
-then in Cursor: Extensions → `...` → Install from VSIX → pick `callmeout-0.0.1.vsix`
+then in Cursor: Extensions → `...` → Install from VSIX → pick `Senior-0.0.1.vsix`
 
 ### 4. settings
 
-`Cmd+,` → search callmeout:
+`Cmd+,` → search Senior:
 
-- `callmeout.daemonPath` — path to daemon binary (defaults to `daemon/target/release/callmeout-daemon` in workspace root)
-- `callmeout.modelPath` — model weights dir (passed as `CACTUS_MODEL_PATH` when daemon starts)
+- `Senior.daemonPath` — path to daemon binary (defaults to `daemon/target/release/Senior-daemon` in workspace root)
+- `Senior.modelPath` — model weights dir (passed as `CACTUS_MODEL_PATH` when daemon starts)
 
 ### 5. run it
 
 extension starts the daemon automatically on activation. saves trigger analysis with a 1.5s debounce. panel opens beside your editor.
 
-manual: `Cmd+Shift+P` → `callmeout: Explain Last Change`
+manual: `Cmd+Shift+P` → `Senior: Explain Last Change`
 
 ## dev
 

@@ -6,12 +6,12 @@ import { DaemonClient } from './client';
 
 export class DaemonManager implements vscode.Disposable {
     private process: cp.ChildProcess | null = null;
-    private readonly socketPath = '/tmp/callmeout.sock';
+    private readonly socketPath = '/tmp/senior.sock';
 
     constructor(private readonly context: vscode.ExtensionContext) {}
 
     getDaemonPath(): string {
-        const config = vscode.workspace.getConfiguration('callmeout');
+        const config = vscode.workspace.getConfiguration('senior');
         const configured = config.get<string>('daemonPath');
         if (configured && configured.length > 0) {
             return configured;
@@ -23,14 +23,14 @@ export class DaemonManager implements vscode.Disposable {
                 'daemon',
                 'target',
                 'release',
-                'callmeout-daemon'
+                'senior-daemon'
             );
         }
         return '';
     }
 
     getModelPath(): string {
-        const config = vscode.workspace.getConfiguration('callmeout');
+        const config = vscode.workspace.getConfiguration('senior');
         return config.get<string>('modelPath') ?? '';
     }
 
@@ -38,7 +38,7 @@ export class DaemonManager implements vscode.Disposable {
         const daemonPath = this.getDaemonPath();
         if (!daemonPath || !fs.existsSync(daemonPath)) {
             vscode.window.showErrorMessage(
-                `callmeout: daemon binary not found at "${daemonPath}". ` +
+                `senior: daemon binary not found at "${daemonPath}". ` +
                 `Run "cargo build --release" in the daemon/ directory.`
             );
             return false;
@@ -57,13 +57,13 @@ export class DaemonManager implements vscode.Disposable {
         await new Promise<void>((resolve) => {
             this.process = cp.spawn(daemonPath, [], { env });
             this.process.stdout?.on('data', (data: Buffer) => {
-                console.log('[callmeout daemon]', data.toString().trim());
+                console.log('[senior daemon]', data.toString().trim());
             });
             this.process.stderr?.on('data', (data: Buffer) => {
-                console.error('[callmeout daemon]', data.toString().trim());
+                console.error('[senior daemon]', data.toString().trim());
             });
             this.process.on('error', (err) => {
-                vscode.window.showErrorMessage(`callmeout daemon error: ${err.message}`);
+                vscode.window.showErrorMessage(`senior daemon error: ${err.message}`);
             });
             // Give the process a moment to bind the socket before we start polling
             setTimeout(resolve, 100);
@@ -76,7 +76,7 @@ export class DaemonManager implements vscode.Disposable {
             await new Promise(r => setTimeout(r, 200));
         }
 
-        vscode.window.showErrorMessage('callmeout: daemon started but not responding — check the output panel.');
+        vscode.window.showErrorMessage('senior: daemon started but not responding — check the output panel.');
         return false;
     }
 

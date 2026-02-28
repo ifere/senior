@@ -18,7 +18,7 @@ export class DaemonClient {
             let buffer = '';
             const timeout = setTimeout(() => {
                 socket.destroy();
-                reject(new Error('callmeout: daemon request timed out'));
+                reject(new Error('senior: daemon request timed out'));
             }, 10_000);
 
             socket.on('connect', () => {
@@ -36,7 +36,7 @@ export class DaemonClient {
                     try {
                         resolve(JSON.parse(line));
                     } catch (e) {
-                        reject(new Error(`callmeout: invalid JSON from daemon: ${line}`));
+                        reject(new Error(`senior: invalid JSON from daemon: ${line}`));
                     }
                 }
             });

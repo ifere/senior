@@ -1,7 +1,7 @@
 {
-  "publisher": "callmeout",
-  "name": "callmeout",
-  "displayName": "callmeout — Voice Companion",
+  "publisher": "senior",
+  "name": "senior",
+  "displayName": "Senior",
   "description": "AI pair programmer: explains diffs, blast radius, and fix paths",
   "version": "0.0.1",
   "engines": { "vscode": "^1.85.0" },
@@ -11,26 +11,26 @@
   "contributes": {
     "commands": [
       {
-        "command": "callmeout.explainLastChange",
-        "title": "callmeout: Explain Last Change"
+        "command": "senior.explainLastChange",
+        "title": "Senior: Explain Last Change"
       },
       {
-        "command": "callmeout.showPanel",
-        "title": "callmeout: Show Impact Panel"
+        "command": "senior.showPanel",
+        "title": "Senior: Show Impact Panel"
       }
     ],
     "configuration": {
-      "title": "callmeout",
+      "title": "Senior",
       "properties": {
-        "callmeout.daemonPath": {
+        "senior.daemonPath": {
           "type": "string",
           "default": "",
-          "description": "Path to callmeout-daemon binary. Defaults to daemon/target/release/callmeout-daemon in workspace."
+          "description": "Path to senior-daemon binary. Defaults to daemon/target/release/senior-daemon in workspace."
         },
-        "callmeout.modelPath": {
+        "senior.modelPath": {
           "type": "string",
           "default": "",
-          "description": "Path to GGUF model file for Cactus LLM."
+          "description": "Path to model weights directory for Cactus LLM."
         }
       }
     }

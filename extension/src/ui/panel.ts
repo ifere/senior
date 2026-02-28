@@ -17,8 +17,8 @@ export class ImpactPanel {
             return;
         }
         this.panel = vscode.window.createWebviewPanel(
-            'callmeoutPanel',
-            'callmeout',
+            'seniorPanel',
+            'Senior',
             vscode.ViewColumn.Beside,
             { enableScripts: true, retainContextWhenHidden: true }
         );

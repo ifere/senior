@@ -11,7 +11,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tracing::{error, info};
 
-const SOCKET_PATH: &str = "/tmp/callmeout.sock";
+const SOCKET_PATH: &str = "/tmp/senior.sock";
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -25,9 +25,9 @@ async fn main() -> Result<()> {
     }
 
     let listener = UnixListener::bind(SOCKET_PATH)?;
-    info!("callmeout daemon listening on {}", SOCKET_PATH);
+    info!("senior daemon listening on {}", SOCKET_PATH);
 
-    let audit = Arc::new(store::AuditLog::open("/tmp/callmeout-audit.db")?);
+    let audit = Arc::new(store::AuditLog::open("/tmp/senior-audit.db")?);
 
     let model_path = std::env::var("CACTUS_MODEL_PATH").unwrap_or_else(|_| {
         tracing::warn!("CACTUS_MODEL_PATH not set, trying default dev path");
