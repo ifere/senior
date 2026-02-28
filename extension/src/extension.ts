@@ -3,14 +3,18 @@ import { DaemonManager } from './daemon/manager';
 import { ImpactPanel } from './ui/panel';
 import { registerCommands } from './commands';
 
+let debounceTimer: NodeJS.Timeout | undefined;
+
 export async function activate(context: vscode.ExtensionContext) {
     const manager = new DaemonManager(context);
     const panel = new ImpactPanel(context);
 
+    // manager.dispose() calls manager.stop() automatically when VS Code deactivates
+    context.subscriptions.push(manager);
+
     await manager.start();
     registerCommands(context, manager, panel);
 
-    let debounceTimer: NodeJS.Timeout | undefined;
     context.subscriptions.push(
         vscode.workspace.onDidSaveTextDocument((_doc) => {
             clearTimeout(debounceTimer);
@@ -18,7 +22,9 @@ export async function activate(context: vscode.ExtensionContext) {
                 if (!manager.isRunning()) return;
                 await vscode.commands.executeCommand('callmeout.explainLastChange');
             }, 1500);
-        })
+        }),
+        // Clear pending debounce when extension deactivates
+        { dispose: () => clearTimeout(debounceTimer) }
     );
 
     const statusBar = vscode.window.createStatusBarItem(
@@ -26,10 +32,13 @@ export async function activate(context: vscode.ExtensionContext) {
         100
     );
     statusBar.text = '$(radio-tower) callmeout';
-    statusBar.tooltip = 'callmeout Voice Companion — click to explain last change';
+    statusBar.tooltip = 'callmeout — click to explain last change';
     statusBar.command = 'callmeout.explainLastChange';
     statusBar.show();
     context.subscriptions.push(statusBar);
 }
 
-export function deactivate() {}
+export function deactivate() {
+    // subscriptions are disposed by VS Code automatically;
+    // daemon.stop() runs via manager.dispose() in context.subscriptions
+}

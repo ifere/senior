@@ -19,8 +19,9 @@ pub fn build_prompt(files: &[DiffFile], raw_diff: &str) -> String {
         .map(|f| format!("{} (+{} -{})", f.path, f.added_lines, f.removed_lines))
         .collect();
 
-    let diff_excerpt = if raw_diff.len() > 3000 {
-        format!("{}...[truncated]", &raw_diff[..3000])
+    let diff_excerpt = if raw_diff.chars().count() > 3000 {
+        let truncated: String = raw_diff.chars().take(3000).collect();
+        format!("{}...[truncated]", truncated)
     } else {
         raw_diff.to_string()
     };
