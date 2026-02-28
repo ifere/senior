@@ -1,0 +1,49 @@
+{
+  "name": "callmeout",
+  "displayName": "callmeout — Voice Companion",
+  "description": "AI pair programmer: explains diffs, blast radius, and fix paths",
+  "version": "0.0.1",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "callmeout.explainLastChange",
+        "title": "callmeout: Explain Last Change"
+      },
+      {
+        "command": "callmeout.showPanel",
+        "title": "callmeout: Show Impact Panel"
+      }
+    ],
+    "configuration": {
+      "title": "callmeout",
+      "properties": {
+        "callmeout.daemonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to callmeout-daemon binary. Defaults to daemon/target/release/callmeout-daemon in workspace."
+        },
+        "callmeout.modelPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to GGUF model file for Cactus LLM."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "@vscode/vsce": "^2.22.0",
+    "typescript": "^5.3.0"
+  }
+}

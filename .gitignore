@@ -1,0 +1,15 @@
+# Rust
+daemon/target/
+daemon/cactus/
+
+# Node
+extension/node_modules/
+extension/out/
+extension/*.vsix
+
+# Models
+*.gguf
+*.cact
+
+# OS
+.DS_Store
