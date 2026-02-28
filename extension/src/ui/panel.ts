@@ -50,7 +50,7 @@ export class ImpactPanel {
     }
 
     private getHtml(): string {
-        const htmlPath = path.join(this.context.extensionPath, 'src', 'ui', 'panel.html');
+        const htmlPath = path.join(this.context.extensionPath, 'out', 'ui', 'panel.html');
         const nonce = crypto.randomBytes(16).toString('hex');
         return fs.readFileSync(htmlPath, 'utf8').replace(/NONCE/g, nonce);
     }

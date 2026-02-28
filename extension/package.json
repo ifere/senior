@@ -42,9 +42,9 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "package": "vsce package",
+    "compile": "tsc -p ./ && cp src/ui/panel.html out/ui/panel.html",
+    "watch": "tsc -watch -p ./ && cp src/ui/panel.html out/ui/panel.html",
+    "package": "vsce package --allow-missing-repository",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
