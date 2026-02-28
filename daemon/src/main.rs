@@ -1,8 +1,10 @@
+mod analyzer;
+mod llm;
 mod protocol;
 mod store;
 
 use anyhow::Result;
-use protocol::{AnalysisResult, ImpactedFile, Request, Response, SuggestedAction};
+use protocol::{Request, Response};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -27,18 +29,37 @@ async fn main() -> Result<()> {
 
     let audit = Arc::new(store::AuditLog::open("/tmp/callmeout-audit.db")?);
 
+    let model_path = std::env::var("CACTUS_MODEL_PATH")
+        .unwrap_or_else(|_| "/Users/chilly/dev/cactus/weights/functiongemma-270m-it".to_string());
+
+    let llm: Option<Arc<llm::CactusLlm>> = match llm::CactusLlm::new(&model_path) {
+        Ok(l) => {
+            info!("Cactus LLM loaded from {}", model_path);
+            Some(Arc::new(l))
+        }
+        Err(e) => {
+            tracing::warn!("Cactus LLM not available ({}), running in stub mode", e);
+            None
+        }
+    };
+
     loop {
         let (stream, _) = listener.accept().await?;
         let audit = audit.clone();
+        let llm = llm.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_connection(stream, audit).await {
+            if let Err(e) = handle_connection(stream, audit, llm).await {
                 error!("connection error: {}", e);
             }
         });
     }
 }
 
-async fn handle_connection(stream: UnixStream, audit: Arc<store::AuditLog>) -> Result<()> {
+async fn handle_connection(
+    stream: UnixStream,
+    audit: Arc<store::AuditLog>,
+    llm: Option<Arc<llm::CactusLlm>>,
+) -> Result<()> {
     let (reader, mut writer) = tokio::io::split(stream);
     let mut reader = BufReader::new(reader);
     let mut line = String::new();
@@ -59,30 +80,29 @@ async fn handle_connection(stream: UnixStream, audit: Arc<store::AuditLog>) -> R
             Ok(Request::Ping) => Response::Pong,
             Ok(Request::AnalyzeDiff(payload)) => {
                 let _ = audit.log("analyze_diff", &serde_json::to_string(&payload.files_touched).unwrap_or_default());
-                // Stub: returns placeholder until LLM is wired in Task 5
-                Response::AnalysisResult(AnalysisResult {
-                    summary: vec![
-                        format!("Changed {} file(s)", payload.files_touched.len()),
-                        "Analysis pending LLM integration".to_string(),
-                    ],
-                    risk_level: "low".to_string(),
-                    risk_reasons: vec!["Stub response — LLM not loaded yet".to_string()],
-                    impacted_files: payload
-                        .files_touched
-                        .iter()
-                        .map(|p| ImpactedFile {
-                            path: p.clone(),
+                let files = analyzer::diff::parse_diff(&payload.diff);
+                match &llm {
+                    Some(llm_ref) => match analyzer::impact::analyze(llm_ref, &files, &payload.diff) {
+                        Ok(result) => Response::AnalysisResult(result),
+                        Err(e) => Response::Error { message: e.to_string() },
+                    },
+                    None => Response::AnalysisResult(protocol::AnalysisResult {
+                        summary: vec![
+                            format!("Stub: {} file(s) changed", files.len()),
+                            "Set CACTUS_MODEL_PATH to enable real analysis".to_string(),
+                        ],
+                        risk_level: "low".to_string(),
+                        risk_reasons: vec!["LLM not loaded".to_string()],
+                        impacted_files: files.iter().map(|f| protocol::ImpactedFile {
+                            path: f.path.clone(),
                             score: 0.5,
-                            why: vec!["File was directly modified".to_string()],
-                        })
-                        .collect(),
-                    impacted_symbols: vec![],
-                    suggested_actions: vec![SuggestedAction {
-                        label: "Review changes".to_string(),
-                        explanation: "Inspect the modified files manually".to_string(),
-                    }],
-                    confidence: 0.0,
-                })
+                            why: vec![format!("+{} -{} lines", f.added_lines, f.removed_lines)],
+                        }).collect(),
+                        impacted_symbols: vec![],
+                        suggested_actions: vec![],
+                        confidence: 0.0,
+                    }),
+                }
             }
             Err(e) => Response::Error {
                 message: format!("parse error: {}", e),
