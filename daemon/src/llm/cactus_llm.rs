@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_void};
 use std::sync::Mutex;
+use tracing::debug;
 
 extern "C" {
     fn cactus_init(
@@ -68,8 +69,8 @@ impl CactusLlm {
         let messages_c = CString::new(messages.to_string())?;
 
         let options = serde_json::json!({
-            "max_tokens": 512,
-            "temperature": 0.3
+            "max_tokens": 256,
+            "temperature": 0.1
         });
         let options_c = CString::new(options.to_string())?;
 
@@ -90,7 +91,7 @@ impl CactusLlm {
             )
         };
 
-        if ret != 0 {
+        if ret < 0 {
             let err = unsafe {
                 let ptr = cactus_get_last_error();
                 if ptr.is_null() {
@@ -107,6 +108,8 @@ impl CactusLlm {
                 .to_string_lossy()
                 .into_owned()
         };
+
+        debug!("cactus raw response: {}", raw_json);
 
         // Parse the cactus response envelope: {"success":true,"response":"..."}
         let parsed: serde_json::Value = serde_json::from_str(&raw_json)

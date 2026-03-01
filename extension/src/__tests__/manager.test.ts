@@ -1,9 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as cp from 'child_process';
+import * as fs from 'fs';
+import * as net from 'net';
 import { DaemonManager } from '../daemon/manager';
 
 // vscode is aliased to __mocks__/vscode.ts via vitest.config.ts.
+vi.mock('child_process');
+vi.mock('fs', () => ({ existsSync: vi.fn() }));
+vi.mock('net');
 
 function makeContext() {
     return {
@@ -113,5 +119,86 @@ describe('DaemonManager.getSocketPath', () => {
         mockConfig({});
         const manager = new DaemonManager(makeContext());
         expect(manager.getSocketPath()).toBe('/tmp/senior.sock');
+    });
+});
+
+// --- DaemonManager.start() ---
+// These tests mock fs, cp.spawn, and net so no real process is launched.
+
+function makeMockProcess() {
+    return {
+        killed: false,
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn(),
+        kill: vi.fn(),
+    };
+}
+
+// Returns a factory for net.createConnection: each call creates a fresh socket
+// whose connect/data events fire via setImmediate AFTER handlers are registered.
+function pongSocketFactory() {
+    return () => {
+        const handlers: Record<string, (arg?: unknown) => void> = {};
+        const socket = {
+            on: vi.fn().mockImplementation((event: string, cb: (arg?: unknown) => void) => {
+                handlers[event] = cb;
+                return socket;
+            }),
+            write: vi.fn(),
+            destroy: vi.fn(),
+        };
+        setImmediate(() => {
+            handlers['connect']?.();
+            setImmediate(() => handlers['data']?.(Buffer.from('{"type":"pong"}\n')));
+        });
+        return socket;
+    };
+}
+
+describe('DaemonManager.start()', () => {
+    beforeEach(() => {
+        vi.clearAllMocks(); // reset call counts between tests
+        vi.mocked(fs.existsSync).mockReturnValue(true);
+        vi.mocked(cp.spawn).mockReturnValue(makeMockProcess() as any);
+        vi.mocked(net.createConnection).mockImplementation(pongSocketFactory() as any);
+    });
+
+    it('spawns daemon with RUST_LOG=debug', async () => {
+        mockConfig({ daemonPath: '/bin/senior-daemon', modelPath: '' });
+        const manager = new DaemonManager(makeContext());
+        await manager.start();
+        const spawnCall = vi.mocked(cp.spawn).mock.calls[0];
+        const env = (spawnCall[2] as any).env as NodeJS.ProcessEnv;
+        expect(env.RUST_LOG).toBe('debug');
+    });
+
+    it('sets CACTUS_MODEL_PATH when model path is configured', async () => {
+        mockConfig({ daemonPath: '/bin/senior-daemon', modelPath: '/models/gemma' });
+        const manager = new DaemonManager(makeContext());
+        await manager.start();
+        const spawnCall = vi.mocked(cp.spawn).mock.calls[0];
+        const env = (spawnCall[2] as any).env as NodeJS.ProcessEnv;
+        expect(env.CACTUS_MODEL_PATH).toBe('/models/gemma');
+    });
+
+    it('does not set CACTUS_MODEL_PATH when model path is empty', async () => {
+        mockConfig({ daemonPath: '/bin/senior-daemon', modelPath: '' });
+        const manager = new DaemonManager(makeContext());
+        await manager.start();
+        const spawnCall = vi.mocked(cp.spawn).mock.calls[0];
+        const env = (spawnCall[2] as any).env as NodeJS.ProcessEnv;
+        expect(env.CACTUS_MODEL_PATH).toBeUndefined();
+    });
+
+    it('shows error and returns false when binary does not exist', async () => {
+        vi.mocked(fs.existsSync).mockReturnValue(false);
+        mockConfig({ daemonPath: '/missing/senior-daemon', modelPath: '' });
+        const showError = vi.spyOn(vscode.window, 'showErrorMessage');
+        const manager = new DaemonManager(makeContext());
+        const result = await manager.start();
+        expect(result).toBe(false);
+        expect(showError).toHaveBeenCalledWith(expect.stringContaining('daemon binary not found'));
+        expect(vi.mocked(cp.spawn)).not.toHaveBeenCalled();
     });
 });

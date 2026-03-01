@@ -6,7 +6,10 @@ import { registerCommands } from './commands';
 let debounceTimer: NodeJS.Timeout | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
-    const manager = new DaemonManager(context);
+    const output = vscode.window.createOutputChannel('Senior');
+    context.subscriptions.push(output);
+
+    const manager = new DaemonManager(context, output);
     const panel = new ImpactPanel(context);
 
     // manager.dispose() calls manager.stop() automatically when VS Code deactivates

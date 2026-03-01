@@ -24,9 +24,17 @@ export const window = {
     activeTextEditor: undefined as unknown,
 };
 
+// Stores handlers registered via registerCommand so tests can invoke them directly.
+const _commandRegistry: Record<string, (...args: unknown[]) => unknown> = {};
+
 export const commands = {
-    registerCommand: (_command: string, _cb: unknown) => ({ dispose: () => {} }),
+    registerCommand: (command: string, cb: (...args: unknown[]) => unknown) => {
+        _commandRegistry[command] = cb;
+        return { dispose: () => {} };
+    },
     executeCommand: (_command: string, ..._args: unknown[]) => Promise.resolve(),
+    // Exposed for tests: vscode.commands._registry['senior.explainLastChange']()
+    _registry: _commandRegistry,
 };
 
 export const StatusBarAlignment = { Left: 1, Right: 2 } as const;

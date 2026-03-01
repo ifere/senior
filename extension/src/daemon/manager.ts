@@ -8,7 +8,10 @@ export class DaemonManager implements vscode.Disposable {
     private process: cp.ChildProcess | null = null;
     private readonly socketPath = '/tmp/senior.sock';
 
-    constructor(private readonly context: vscode.ExtensionContext) {}
+    constructor(
+        private readonly context: vscode.ExtensionContext,
+        private readonly output?: vscode.OutputChannel
+    ) {}
 
     getDaemonPath(): string {
         const config = vscode.workspace.getConfiguration('senior');
@@ -50,17 +53,17 @@ export class DaemonManager implements vscode.Disposable {
         const modelPath = this.getModelPath();
         const env: NodeJS.ProcessEnv = {
             ...process.env,
-            RUST_LOG: 'info',
+            RUST_LOG: 'debug',
             ...(modelPath ? { CACTUS_MODEL_PATH: modelPath } : {}),
         };
 
         await new Promise<void>((resolve) => {
             this.process = cp.spawn(daemonPath, [], { env });
             this.process.stdout?.on('data', (data: Buffer) => {
-                console.log('[senior daemon]', data.toString().trim());
+                this.output?.appendLine(data.toString().trimEnd());
             });
             this.process.stderr?.on('data', (data: Buffer) => {
-                console.error('[senior daemon]', data.toString().trim());
+                this.output?.appendLine(data.toString().trimEnd());
             });
             this.process.on('error', (err) => {
                 vscode.window.showErrorMessage(`senior daemon error: ${err.message}`);
