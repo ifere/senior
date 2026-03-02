@@ -33,11 +33,18 @@ const STATUS_ICONS: Record<VoiceState, string> = {
     speaking:   '$(unmute) Speaking...',
 };
 
+// Minor 6: named constant for the temporary WAV path
+const VOICE_TMP_WAV = '/tmp/senior-q.wav';
+
+// Minor 5: typed interface for voice_answer payload
+interface VoiceAnswer { text: string }
+
 export class VoiceController {
     private state: VoiceState = 'idle';
     private shouldLoop = false;
     private soxProcess: cp.ChildProcess | null = null;
     private sayProcess: cp.ChildProcess | null = null;
+    private asrProcess: cp.ChildProcess | null = null;  // Fix 2: track ASR process
     private lastAnalysis: AnalysisResult | null = null;
 
     constructor(
@@ -62,20 +69,23 @@ export class VoiceController {
         await this.startLoop();
     }
 
+    // Fix 3: speakAnalysis() uses _speakDirect() to avoid clobbering this.sayProcess
     async speakAnalysis(): Promise<void> {
         if (!this.lastAnalysis) {
-            await this.say("You haven't run an analysis yet.");
+            await this._speakDirect('No analysis available yet.');
             return;
         }
-        await this.say(buildAnalysisSpeech(this.lastAnalysis));
+        await this._speakDirect(buildAnalysisSpeech(this.lastAnalysis));
     }
 
     stop(): void {
         this.shouldLoop = false;
         this.soxProcess?.kill();
         this.sayProcess?.kill();
+        this.asrProcess?.kill();  // Fix 2: kill ASR process on stop
         this.soxProcess = null;
         this.sayProcess = null;
+        this.asrProcess = null;
         this.setState('idle');
     }
 
@@ -100,9 +110,9 @@ export class VoiceController {
     private async fetchGreeting(): Promise<string> {
         try {
             const client = new DaemonClient(this.manager.getSocketPath());
-            const response = await client.send('greet', { last_analysis: this.lastAnalysis });
+            const response = await client.send<unknown, VoiceAnswer>('greet', { last_analysis: this.lastAnalysis });
             if (response.type === 'voice_answer') {
-                return (response.payload as any).text;
+                return response.payload.text;
             }
         } catch (e) {
             this.output.appendLine(`[voice] greet error: ${e}`);
@@ -115,23 +125,29 @@ export class VoiceController {
     private async listenOnce(): Promise<void> {
         this.setState('listening');
 
-        await this.record('/tmp/senior-q.wav');
+        // Fix 1: wrap record() in try/catch so errors exit the loop cleanly
+        try {
+            await this.record(VOICE_TMP_WAV);
+        } catch {
+            this.stop();
+            return;
+        }
         if (!this.shouldLoop) return;
 
         this.setState('processing');
 
-        const question = await this.transcribe('/tmp/senior-q.wav');
+        const question = await this.transcribe(VOICE_TMP_WAV);
         if (!question.trim()) return;
 
         let answer = "Sorry, I couldn't process that.";
         try {
             const client = new DaemonClient(this.manager.getSocketPath());
-            const response = await client.send('voice_query', {
+            const response = await client.send<unknown, VoiceAnswer>('voice_query', {
                 question,
                 context: this.lastAnalysis,
             });
             if (response.type === 'voice_answer') {
-                answer = (response.payload as any).text;
+                answer = response.payload.text;
             }
         } catch (e) {
             this.output.appendLine(`[voice] query error: ${e}`);
@@ -166,7 +182,9 @@ export class VoiceController {
         return new Promise((resolve) => {
             const asr = this.getAsrBinary();
             const model = this.getSttModelPath();
-            const proc = cp.spawn(asr, [model, audioPath]);
+            // Fix 2: store process on this so stop() can kill it
+            this.asrProcess = cp.spawn(asr, [model, audioPath]);
+            const proc = this.asrProcess;
             let out = '';
             proc.stdout?.on('data', (d: Buffer) => { out += d.toString(); });
             proc.stderr?.on('data', (d: Buffer) => {
@@ -175,8 +193,9 @@ export class VoiceController {
             proc.on('exit', () => resolve(stripAnsi(out).trim()));
             proc.on('error', (e: NodeJS.ErrnoException) => {
                 if (e.code === 'ENOENT') {
+                    // Minor 7: user-friendly ASR error message without developer path
                     vscode.window.showErrorMessage(
-                        'Senior voice: ASR binary not found. Run: cd /Users/chilly/dev/cactus && venv/bin/cactus build'
+                        'Senior voice: ASR binary not found. Run: cactus build (see https://github.com/cactus-compute/cactus)'
                     );
                 }
                 resolve('');
@@ -189,6 +208,15 @@ export class VoiceController {
             this.sayProcess = cp.spawn('say', ['-r', '220', text]);
             this.sayProcess.on('exit', () => resolve());
             this.sayProcess.on('error', () => resolve());
+        });
+    }
+
+    // Fix 3: _speakDirect() uses a local process, never touches this.sayProcess
+    private _speakDirect(text: string): Promise<void> {
+        return new Promise((resolve) => {
+            const proc = cp.spawn('say', ['-r', '220', text]);
+            proc.on('close', resolve);
+            proc.on('error', resolve);
         });
     }
 
