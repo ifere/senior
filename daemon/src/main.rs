@@ -119,16 +119,48 @@ async fn handle_connection(
                 }
             }
             Ok(Request::Greet(payload)) => {
-                let _ = &payload.last_analysis;
-                Response::Error {
-                    message: "greet handler not yet implemented".to_string(),
+                match &llm {
+                    Some(llm_ref) => {
+                        let llm_clone = llm_ref.clone();
+                        let analysis = payload.last_analysis.clone();
+                        match tokio::task::spawn_blocking(move || {
+                            llm::voice::greet(&llm_clone, analysis.as_ref())
+                        }).await {
+                            Ok(Ok(text)) => Response::VoiceAnswer { text },
+                            Ok(Err(e)) => Response::VoiceAnswer {
+                                text: format!("Hey, I had trouble thinking. {}", e),
+                            },
+                            Err(e) => Response::Error { message: format!("greet panicked: {}", e) },
+                        }
+                    }
+                    None => Response::VoiceAnswer {
+                        text: if payload.last_analysis.is_some() {
+                            "Hey, you have some changes. The LLM is not loaded so I cannot say more.".to_string()
+                        } else {
+                            "Hey, no changes yet. What would you like to work on?".to_string()
+                        },
+                    },
                 }
             }
             Ok(Request::VoiceQuery(payload)) => {
-                let _ = &payload.question;
-                let _ = &payload.context;
-                Response::Error {
-                    message: "voice_query handler not yet implemented".to_string(),
+                match &llm {
+                    Some(llm_ref) => {
+                        let llm_clone = llm_ref.clone();
+                        let question = payload.question.clone();
+                        let context = payload.context.clone();
+                        match tokio::task::spawn_blocking(move || {
+                            llm::voice::answer(&llm_clone, &question, context.as_ref())
+                        }).await {
+                            Ok(Ok(text)) => Response::VoiceAnswer { text },
+                            Ok(Err(e)) => Response::VoiceAnswer {
+                                text: format!("Sorry, I could not process that. {}", e),
+                            },
+                            Err(e) => Response::Error { message: format!("voice_query panicked: {}", e) },
+                        }
+                    }
+                    None => Response::VoiceAnswer {
+                        text: "The LLM is not loaded so I cannot answer right now.".to_string(),
+                    },
                 }
             }
             Err(e) => Response::Error {
