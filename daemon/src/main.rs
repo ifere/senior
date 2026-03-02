@@ -118,6 +118,19 @@ async fn handle_connection(
                     }),
                 }
             }
+            Ok(Request::Greet(payload)) => {
+                let _ = &payload.last_analysis;
+                Response::Error {
+                    message: "greet handler not yet implemented".to_string(),
+                }
+            }
+            Ok(Request::VoiceQuery(payload)) => {
+                let _ = &payload.question;
+                let _ = &payload.context;
+                Response::Error {
+                    message: "voice_query handler not yet implemented".to_string(),
+                }
+            }
             Err(e) => Response::Error {
                 message: format!("parse error: {}", e),
             },

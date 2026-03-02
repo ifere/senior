@@ -203,6 +203,18 @@ mod tests {
     }
 
     #[test]
+    fn test_deserialize_greet_with_analysis() {
+        let raw = r#"{"type":"greet","payload":{"last_analysis":{"summary":["ok"],"risk_level":"low","risk_reasons":[],"impacted_files":[],"impacted_symbols":[],"suggested_actions":[],"confidence":0.8}}}"#;
+        let req: Request = serde_json::from_str(raw).unwrap();
+        if let Request::Greet(p) = req {
+            let analysis = p.last_analysis.expect("expected Some");
+            assert_eq!(analysis.risk_level, "low");
+        } else {
+            panic!("expected Greet");
+        }
+    }
+
+    #[test]
     fn test_serialize_voice_answer() {
         let resp = Response::VoiceAnswer { text: "Looks good.".to_string() };
         let json = serde_json::to_string(&resp).unwrap();
