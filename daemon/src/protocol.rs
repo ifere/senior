@@ -7,6 +7,10 @@ pub enum Request {
     Ping,
     #[serde(rename = "analyze_diff")]
     AnalyzeDiff(AnalyzeDiffPayload),
+    #[serde(rename = "greet")]
+    Greet(GreetPayload),
+    #[serde(rename = "voice_query")]
+    VoiceQuery(VoiceQueryPayload),
 }
 
 #[derive(Debug, Deserialize)]
@@ -15,6 +19,17 @@ pub struct AnalyzeDiffPayload {
     pub files_touched: Vec<String>,
     pub active_file: String,
     pub trigger: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GreetPayload {
+    pub last_analysis: Option<AnalysisResult>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VoiceQueryPayload {
+    pub question: String,
+    pub context: Option<AnalysisResult>,
 }
 
 #[derive(Debug, Serialize)]
@@ -26,9 +41,11 @@ pub enum Response {
     AnalysisResult(AnalysisResult),
     #[serde(rename = "error")]
     Error { message: String },
+    #[serde(rename = "voice_answer")]
+    VoiceAnswer { text: String },
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AnalysisResult {
     pub summary: Vec<String>,
     pub risk_level: String,
@@ -39,14 +56,14 @@ pub struct AnalysisResult {
     pub confidence: f32,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ImpactedFile {
     pub path: String,
     pub score: f32,
     pub why: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ImpactedSymbol {
     pub name: String,
     pub kind: String,
@@ -54,7 +71,7 @@ pub struct ImpactedSymbol {
     pub score: f32,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SuggestedAction {
     pub label: String,
     pub explanation: String,
@@ -165,5 +182,32 @@ mod tests {
         let val: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(val["label"], "Add tests");
         assert_eq!(val["explanation"], "This path has no coverage");
+    }
+
+    #[test]
+    fn test_deserialize_greet_no_analysis() {
+        let raw = r#"{"type":"greet","payload":{"last_analysis":null}}"#;
+        let req: Request = serde_json::from_str(raw).unwrap();
+        assert!(matches!(req, Request::Greet(_)));
+    }
+
+    #[test]
+    fn test_deserialize_voice_query() {
+        let raw = r#"{"type":"voice_query","payload":{"question":"is this safe?","context":null}}"#;
+        let req: Request = serde_json::from_str(raw).unwrap();
+        if let Request::VoiceQuery(p) = req {
+            assert_eq!(p.question, "is this safe?");
+        } else {
+            panic!("expected VoiceQuery");
+        }
+    }
+
+    #[test]
+    fn test_serialize_voice_answer() {
+        let resp = Response::VoiceAnswer { text: "Looks good.".to_string() };
+        let json = serde_json::to_string(&resp).unwrap();
+        let val: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(val["type"], "voice_answer");
+        assert_eq!(val["payload"]["text"], "Looks good.");
     }
 }
