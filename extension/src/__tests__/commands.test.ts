@@ -93,6 +93,10 @@ function makeMockPanel() {
     return { show: vi.fn(), setLoading: vi.fn(), setResult: vi.fn(), setError: vi.fn() };
 }
 
+function makeMockVoice() {
+    return { toggle: vi.fn(), speakAnalysis: vi.fn(), setLastAnalysis: vi.fn(), stop: vi.fn() };
+}
+
 function makeContext() {
     return { subscriptions: { push: vi.fn() } };
 }
@@ -127,7 +131,7 @@ describe('isAnalyzing guard', () => {
 
         const manager = makeMockManager();
         const panel = makeMockPanel();
-        registerCommands(makeContext() as any, manager as any, panel as any);
+        registerCommands(makeContext() as any, manager as any, panel as any, makeMockVoice() as any);
         const handler = (vscode.commands as any)._registry['senior.explainLastChange'];
 
         // Call #1: runs synchronously past isAnalyzing=true, panel.show(), then suspends at getGitDiff.
@@ -159,7 +163,7 @@ describe('isAnalyzing guard', () => {
 
         const manager = makeMockManager();
         const panel = makeMockPanel();
-        registerCommands(makeContext() as any, manager as any, panel as any);
+        registerCommands(makeContext() as any, manager as any, panel as any, makeMockVoice() as any);
         const handler = (vscode.commands as any)._registry['senior.explainLastChange'];
 
         await handler(); // first call — runs to completion

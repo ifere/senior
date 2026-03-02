@@ -23,6 +23,28 @@
       {
         "command": "senior.showPanel",
         "title": "Senior: Show Impact Panel"
+      },
+      {
+        "command": "senior.voiceToggle",
+        "title": "Senior: Toggle Voice"
+      },
+      {
+        "command": "senior.speakAnalysis",
+        "title": "Senior: Speak Analysis"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "senior.voiceToggle",
+        "key": "ctrl+shift+v",
+        "mac": "cmd+shift+v",
+        "when": "editorTextFocus || !inputFocus"
+      },
+      {
+        "command": "senior.speakAnalysis",
+        "key": "ctrl+shift+s",
+        "mac": "cmd+shift+s",
+        "when": "editorTextFocus || !inputFocus"
       }
     ],
     "configuration": {

@@ -3,6 +3,7 @@ import * as cp from 'child_process';
 import { DaemonClient } from './daemon/client';
 import { DaemonManager } from './daemon/manager';
 import { ImpactPanel } from './ui/panel';
+import { VoiceController } from './voice/controller';
 
 export function parseFilesFromDiff(diff: string): string[] {
     return diff
@@ -54,12 +55,13 @@ function getGitDiff(workspaceRoot: string): Promise<string> {
 export function registerCommands(
     context: vscode.ExtensionContext,
     manager: DaemonManager,
-    panel: ImpactPanel
+    panel: ImpactPanel,
+    voice: VoiceController,
 ) {
     let isAnalyzing = false;
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('senior.explainLastChange', async () => {
+        vscode.commands.registerCommand('senior.explainLastChange', async (trigger: 'manual' | 'auto' = 'manual') => {
             if (isAnalyzing) return;
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders) {
@@ -72,7 +74,13 @@ export function registerCommands(
             }
             isAnalyzing = true;
             const root = workspaceFolders[0].uri.fsPath;
-            panel.show();
+            if (trigger === 'manual') {
+                panel.show();
+            } else if (!panel.isOpen()) {
+                // Auto-save: don't pop open the panel if the user hasn't opened it yet
+                isAnalyzing = false;
+                return;
+            }
             panel.setLoading(true);
             try {
                 const diff = await getGitDiff(root);
@@ -90,6 +98,7 @@ export function registerCommands(
                 });
                 if (response.type === 'analysis_result') {
                     panel.setResult(response.payload as any);
+                    voice.setLastAnalysis(response.payload as any);
                 } else if (response.type === 'error') {
                     panel.setError((response.payload as any).message);
                 }
@@ -103,6 +112,8 @@ export function registerCommands(
 
         vscode.commands.registerCommand('senior.showPanel', () => {
             panel.show();
-        })
+        }),
+        vscode.commands.registerCommand('senior.voiceToggle', () => voice.toggle()),
+        vscode.commands.registerCommand('senior.speakAnalysis', () => voice.speakAnalysis()),
     );
 }
