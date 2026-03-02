@@ -3,6 +3,12 @@ import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import { parseFilesFromDiff, registerCommands } from '../commands';
 
+vi.mock('../daemon/client', () => ({
+    DaemonClient: class {
+        send() { return Promise.resolve({ type: 'analysis_result', payload: { summary: 'ok' } }); }
+    },
+}));
+
 vi.mock('child_process');
 
 // parseFilesFromDiff is a pure function — no mocking needed.
@@ -90,7 +96,7 @@ function makeMockManager() {
 }
 
 function makeMockPanel() {
-    return { show: vi.fn(), setLoading: vi.fn(), setResult: vi.fn(), setError: vi.fn() };
+    return { show: vi.fn(), setLoading: vi.fn(), setResult: vi.fn(), setError: vi.fn(), isOpen: vi.fn().mockReturnValue(true) };
 }
 
 function makeMockVoice() {
@@ -171,5 +177,83 @@ describe('isAnalyzing guard', () => {
 
         await handler(); // second call — guard is reset, should proceed normally
         expect(panel.show).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('senior.voiceToggle command', () => {
+    beforeEach(() => {
+        Object.keys((vscode.commands as any)._registry).forEach(
+            k => delete (vscode.commands as any)._registry[k]
+        );
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('calls voice.toggle() when invoked', () => {
+        const voice = makeMockVoice();
+        registerCommands(makeContext() as any, makeMockManager() as any, makeMockPanel() as any, voice as any);
+        const handler = (vscode.commands as any)._registry['senior.voiceToggle'];
+
+        handler();
+
+        expect(voice.toggle).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('senior.speakAnalysis command', () => {
+    beforeEach(() => {
+        Object.keys((vscode.commands as any)._registry).forEach(
+            k => delete (vscode.commands as any)._registry[k]
+        );
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('calls voice.speakAnalysis() when invoked', () => {
+        const voice = makeMockVoice();
+        registerCommands(makeContext() as any, makeMockManager() as any, makeMockPanel() as any, voice as any);
+        const handler = (vscode.commands as any)._registry['senior.speakAnalysis'];
+
+        handler();
+
+        expect(voice.speakAnalysis).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('voice.setLastAnalysis wiring', () => {
+    beforeEach(() => {
+        vscode.workspace.workspaceFolders = [
+            { uri: { fsPath: '/test-ws' } },
+        ] as typeof vscode.workspace.workspaceFolders;
+        Object.keys((vscode.commands as any)._registry).forEach(
+            k => delete (vscode.commands as any)._registry[k]
+        );
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('calls voice.setLastAnalysis() with the result payload after a successful analysis', async () => {
+        // git diff returns a non-empty diff so the daemon is called
+        vi.mocked(cp.exec).mockImplementation((cmd: string, _opts: any, cb: any) => {
+            if (cmd.includes('rev-parse')) cb(new Error('no parent'), '', '');
+            else cb(null, 'diff --git a/foo.ts b/foo.ts\n--- a/foo.ts\n+++ b/foo.ts\n@@ -1 +1 @@\n-old\n+new\n', '');
+            return {} as any;
+        });
+
+        const voice = makeMockVoice();
+        const panel = makeMockPanel();
+        registerCommands(makeContext() as any, makeMockManager() as any, panel as any, voice as any);
+        const handler = (vscode.commands as any)._registry['senior.explainLastChange'];
+
+        await handler();
+
+        expect(voice.setLastAnalysis).toHaveBeenCalledTimes(1);
+        expect(voice.setLastAnalysis).toHaveBeenCalledWith({ summary: 'ok' });
     });
 });

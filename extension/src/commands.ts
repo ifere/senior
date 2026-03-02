@@ -94,7 +94,7 @@ export function registerCommands(
                     diff,
                     files_touched,
                     active_file: vscode.window.activeTextEditor?.document.fileName ?? '',
-                    trigger: 'manual',
+                    trigger,
                 });
                 if (response.type === 'analysis_result') {
                     panel.setResult(response.payload as any);
