@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { DaemonManager } from './daemon/manager';
 import { ImpactPanel } from './ui/panel';
 import { registerCommands } from './commands';
+import { VoiceController } from './voice/controller';
 
 let debounceTimer: NodeJS.Timeout | undefined;
 
@@ -16,14 +17,13 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(manager);
 
     await manager.start();
-    registerCommands(context, manager, panel);
 
     context.subscriptions.push(
         vscode.workspace.onDidSaveTextDocument((_doc) => {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(async () => {
                 if (!manager.isRunning()) return;
-                await vscode.commands.executeCommand('senior.explainLastChange');
+                await vscode.commands.executeCommand('senior.explainLastChange', 'auto');
             }, 1500);
         }),
         // Clear pending debounce when extension deactivates
@@ -39,6 +39,11 @@ export async function activate(context: vscode.ExtensionContext) {
     statusBar.command = 'senior.explainLastChange';
     statusBar.show();
     context.subscriptions.push(statusBar);
+
+    const voice = new VoiceController(manager, statusBar, output);
+    context.subscriptions.push(voice);
+
+    registerCommands(context, manager, panel, voice);
 }
 
 export function deactivate() {
