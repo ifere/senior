@@ -16,7 +16,6 @@ extension/*.vsix
 
 # Local dev artifacts
 .claude/
-docs/
 CLAUDE.md
 firebase-debug.log
 app
