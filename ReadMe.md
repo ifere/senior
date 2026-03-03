@@ -42,6 +42,11 @@ You can also trigger an analysis at any time via the command palette.
 - **Node.js** ≥ 18 with npm
 - **Cactus SDK** — built locally with a model downloaded. See [cactuscompute.com](https://cactuscompute.com) for installation. Once set up you will have a `libcactus.dylib` (macOS) or `libcactus.so` (Linux) and a model weights directory.
 
+**For voice features (⌘⇧V):**
+- **SoX** — `brew install sox` (macOS). Handles mic recording with silence detection.
+- **Cactus ASR binary** — `cactus build` inside the Cactus SDK directory. Produces an `asr` binary for file-mode transcription.
+- **moonshine-base model** — download via the Cactus CLI. Fast on-device STT, ~100 ms latency on Apple Silicon.
+
 ---
 
 ## Getting started
@@ -71,10 +76,12 @@ Open the Extensions panel → `···` menu → **Install from VSIX** → select
 
 Open settings (`Cmd+,`) and search **Senior**:
 
-| Setting | Default | Description |
-|---|---|---|
-| `senior.daemonPath` | *(workspace)* | Path to the `senior-daemon` binary. Defaults to `daemon/target/release/senior-daemon` relative to the workspace root. |
-| `senior.modelPath` | — | Path to the Cactus model weights directory. Passed to the daemon as `CACTUS_MODEL_PATH` on startup. |
+| Setting | Description |
+|---|---|
+| `senior.daemonPath` | Path to the `senior-daemon` binary. Defaults to `daemon/target/release/senior-daemon` relative to the workspace root. |
+| `senior.modelPath` | Path to the Cactus model weights directory. Passed to the daemon as `CACTUS_MODEL_PATH`. Required for real LLM inference; omitting it runs the daemon in stub mode. |
+| `senior.asrBinaryPath` | Path to the cactus ASR binary for voice transcription. Build it with `cactus build`. Required for the voice loop (⌘⇧V). |
+| `senior.sttModelPath` | Path to the STT model weights directory (e.g. `moonshine-base`). Required for the voice loop. |
 
 ### 5. Use it
 
@@ -92,8 +99,18 @@ To trigger manually: `Cmd+Shift+P` → **Senior: Explain Last Change**.
 ## Development
 
 ```bash
-# Run all daemon unit tests
-cd daemon && cargo test
+# All Makefile targets that touch the daemon require CACTUS_LIB_DIR.
+# Set it in your shell or pass inline:
+export CACTUS_LIB_DIR=/path/to/cactus/build
+
+# Run unit tests (fast, no daemon needed)
+make test
+
+# Run integration tests (spawns the real daemon, tests real socket I/O)
+make test-integration
+
+# Run everything
+make test-all
 
 # Watch TypeScript (recompiles on save)
 cd extension && npm run watch
@@ -144,10 +161,11 @@ Contributions are welcome. A few things to know before you start:
 - Local-first via Cactus
 - SQLite audit log
 
-**v0.5 — voice**
-- Push-to-talk mic capture in the panel
-- Cactus Whisper STT → transcribed query
-- Spoken blast-radius summary via `say` (macOS) / `espeak` (Linux)
+**v0.5 — voice (done)**
+- Press ⌘⇧V — Senior greets you based on your current changes
+- Talk; silence detection via SoX ends each turn automatically
+- Cactus moonshine-base ASR → transcription → LLM → spoken response via `say`
+- Press ⌘⇧S to hear the last analysis read aloud without entering the voice loop
 
 **v1 — action loop**
 - Proposed patch confirmation flow (Senior suggests a fix, you approve)

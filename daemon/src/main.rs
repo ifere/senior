@@ -33,18 +33,25 @@ async fn main() -> Result<()> {
     let audit = Arc::new(store::AuditLog::open("/tmp/senior-audit.db")?);
 
     let model_path = std::env::var("CACTUS_MODEL_PATH").unwrap_or_else(|_| {
-        tracing::warn!("CACTUS_MODEL_PATH not set, trying default dev path");
-        "/Users/chilly/dev/cactus/weights/functiongemma-270m-it".to_string()
+        tracing::warn!(
+            "CACTUS_MODEL_PATH is not set — running in stub mode. \
+             Set it to your model weights directory to enable LLM inference."
+        );
+        String::new()
     });
 
-    let llm: Option<Arc<llm::CactusLlm>> = match llm::CactusLlm::new(&model_path) {
-        Ok(l) => {
-            info!("Cactus LLM loaded from {}", model_path);
-            Some(Arc::new(l))
-        }
-        Err(e) => {
-            tracing::warn!("Cactus LLM not available ({}), running in stub mode", e);
-            None
+    let llm: Option<Arc<llm::CactusLlm>> = if model_path.is_empty() {
+        None
+    } else {
+        match llm::CactusLlm::new(&model_path) {
+            Ok(l) => {
+                info!("Cactus LLM loaded from {}", model_path);
+                Some(Arc::new(l))
+            }
+            Err(e) => {
+                tracing::warn!("Cactus LLM failed to load from '{}': {} — running in stub mode", model_path, e);
+                None
+            }
         }
     };
 

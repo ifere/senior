@@ -2,6 +2,10 @@
 name = "senior-daemon"
 version = "0.1.0"
 edition = "2021"
+description = "Local Rust daemon for Senior — AI pair programmer that analyses git diffs via on-device LLM inference"
+license = "MIT"
+repository = "https://github.com/ifere/senior"
+homepage = "https://github.com/ifere/senior"
 
 [[bin]]
 name = "senior-daemon"

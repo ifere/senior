@@ -226,12 +226,10 @@ export class VoiceController {
     }
 
     private getAsrBinary(): string {
-        return vscode.workspace.getConfiguration('senior').get<string>('asrBinaryPath')
-            ?? '/Users/chilly/dev/cactus/tests/build/asr';
+        return vscode.workspace.getConfiguration('senior').get<string>('asrBinaryPath') ?? '';
     }
 
     private getSttModelPath(): string {
-        return vscode.workspace.getConfiguration('senior').get<string>('sttModelPath')
-            ?? '/Users/chilly/dev/cactus/weights/moonshine-base';
+        return vscode.workspace.getConfiguration('senior').get<string>('sttModelPath') ?? '';
     }
 }

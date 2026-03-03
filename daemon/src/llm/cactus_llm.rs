@@ -146,7 +146,7 @@ mod tests {
     #[ignore] // Run with: CACTUS_MODEL_PATH=... cargo test -- --ignored
     fn test_cactus_complete_live() {
         let model_path = std::env::var("CACTUS_MODEL_PATH")
-            .unwrap_or_else(|_| "/Users/chilly/dev/cactus/weights/functiongemma-270m-it".to_string());
+            .expect("CACTUS_MODEL_PATH must be set to run live tests");
         let llm = CactusLlm::new(&model_path).expect("failed to init model");
         let result = llm.complete("You are helpful. Be brief.", "Say hello in one word.");
         assert!(result.is_ok(), "complete failed: {:?}", result);

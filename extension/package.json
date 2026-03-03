@@ -53,12 +53,22 @@
         "senior.daemonPath": {
           "type": "string",
           "default": "",
-          "description": "Path to senior-daemon binary. Defaults to daemon/target/release/senior-daemon in workspace."
+          "description": "Path to senior-daemon binary. Defaults to daemon/target/release/senior-daemon relative to the workspace root."
         },
         "senior.modelPath": {
           "type": "string",
           "default": "",
-          "description": "Path to model weights directory for Cactus LLM."
+          "description": "Path to Cactus model weights directory. Passed to the daemon as CACTUS_MODEL_PATH. Required for LLM inference; without it the daemon runs in stub mode."
+        },
+        "senior.asrBinaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the cactus ASR binary used for voice transcription. Build it with: cactus build. Required for the voice loop (⌘⇧V)."
+        },
+        "senior.sttModelPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the STT model weights directory (e.g. moonshine-base). Required for the voice loop (⌘⇧V)."
         }
       }
     }

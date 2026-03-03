@@ -1,23 +1,32 @@
-.PHONY: all daemon daemon-dev extension test test-integration test-all clean
+.PHONY: all daemon daemon-dev extension test test-integration test-all check-env clean
 
-all: daemon extension
+# CACTUS_LIB_DIR must point to the directory containing libcactus.dylib / libcactus.so.
+# Set it in your shell or pass it on the command line:
+#   CACTUS_LIB_DIR=/path/to/cactus/build make
 
-daemon:
-	cd daemon && cargo build --release
+check-env:
+ifndef CACTUS_LIB_DIR
+	$(error CACTUS_LIB_DIR is not set. Example: CACTUS_LIB_DIR=/path/to/cactus/build make)
+endif
 
-daemon-dev:
-	cd daemon && cargo build
+all: check-env daemon extension
+
+daemon: check-env
+	cd daemon && CACTUS_LIB_DIR=$(CACTUS_LIB_DIR) cargo build --release
+
+daemon-dev: check-env
+	cd daemon && CACTUS_LIB_DIR=$(CACTUS_LIB_DIR) cargo build
 
 extension:
 	cd extension && npm install && npm run compile
 
-# Unit tests only — fast, no side effects, no daemon required
-test:
+# Unit tests only — fast, no side effects, no release binary required
+test: check-env
 	cd extension && npm test
-	cd daemon && cargo test --bin senior-daemon
+	cd daemon && CACTUS_LIB_DIR=$(CACTUS_LIB_DIR) cargo test --bin senior-daemon
 
 # Integration tests — spawns the real daemon binary, tests real socket I/O
-# Requires: daemon binary built (make daemon), sox installed (brew install sox)
+# Requires: release binary built (make daemon), sox installed (brew install sox)
 test-integration: daemon
 	cd daemon && cargo test --test integration_test
 	cd extension && npm run test:integration

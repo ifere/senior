@@ -56,10 +56,14 @@ describe('say (macOS TTS)', () => {
 describe('cactus ASR binary', () => {
     const ASR_PATHS = [
         process.env.SENIOR_ASR_BINARY,
-        '/Users/chilly/dev/cactus/tests/build/asr',
+        process.env.SENIOR_ASR_BINARY_PATH,
     ].filter(Boolean) as string[];
 
-    it('at least one configured ASR binary path exists', () => {
+    it('at least one configured ASR binary path exists (set SENIOR_ASR_BINARY env var)', () => {
+        if (ASR_PATHS.length === 0) {
+            console.warn('SENIOR_ASR_BINARY not set — skipping ASR binary check. Set it to the path of your cactus asr binary.');
+            return;
+        }
         const found = ASR_PATHS.find(p => fs.existsSync(p));
         expect(
             found,
@@ -67,12 +71,16 @@ describe('cactus ASR binary', () => {
         ).toBeTruthy();
     });
 
-    it('ASR model weights directory exists', () => {
+    it('ASR model weights directory exists (set SENIOR_STT_MODEL env var)', () => {
         const MODEL_PATHS = [
             process.env.SENIOR_STT_MODEL,
-            '/Users/chilly/dev/cactus/weights/moonshine-base',
+            process.env.SENIOR_STT_MODEL_PATH,
         ].filter(Boolean) as string[];
 
+        if (MODEL_PATHS.length === 0) {
+            console.warn('SENIOR_STT_MODEL not set — skipping STT model check. Set it to your moonshine-base weights directory.');
+            return;
+        }
         const found = MODEL_PATHS.find(p => fs.existsSync(p));
         expect(
             found,
