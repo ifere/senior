@@ -11,7 +11,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tracing::{error, info};
 
-const SOCKET_PATH: &str = "/tmp/senior.sock";
+const DEFAULT_SOCKET_PATH: &str = "/tmp/senior.sock";
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -19,13 +19,16 @@ async fn main() -> Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
+    let socket_path = std::env::var("SENIOR_SOCKET_PATH")
+        .unwrap_or_else(|_| DEFAULT_SOCKET_PATH.to_string());
+
     // Remove stale socket
-    if Path::new(SOCKET_PATH).exists() {
-        std::fs::remove_file(SOCKET_PATH)?;
+    if Path::new(&socket_path).exists() {
+        std::fs::remove_file(&socket_path)?;
     }
 
-    let listener = UnixListener::bind(SOCKET_PATH)?;
-    info!("senior daemon listening on {}", SOCKET_PATH);
+    let listener = UnixListener::bind(&socket_path)?;
+    info!("senior daemon listening on {}", socket_path);
 
     let audit = Arc::new(store::AuditLog::open("/tmp/senior-audit.db")?);
 

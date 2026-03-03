@@ -11,9 +11,13 @@ export class ImpactPanel {
         this.context = context;
     }
 
+    isOpen(): boolean {
+        return this.panel !== null;
+    }
+
     show(): void {
         if (this.panel) {
-            this.panel.reveal(vscode.ViewColumn.Beside);
+            this.panel.reveal(vscode.ViewColumn.Beside, true); // preserveFocus: don't steal editor focus
             return;
         }
         this.panel = vscode.window.createWebviewPanel(
