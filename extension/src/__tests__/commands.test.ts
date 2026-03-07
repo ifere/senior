@@ -100,7 +100,7 @@ function makeMockPanel() {
 }
 
 function makeMockVoice() {
-    return { toggle: vi.fn(), speakAnalysis: vi.fn(), setLastAnalysis: vi.fn(), stop: vi.fn() };
+    return { toggle: vi.fn(), speakAnalysis: vi.fn(), setLastAnalysis: vi.fn(), stop: vi.fn(), setAnalyzing: vi.fn() };
 }
 
 function makeContext() {

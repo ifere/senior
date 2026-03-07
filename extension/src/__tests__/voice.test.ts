@@ -81,12 +81,53 @@ describe('VoiceController', () => {
     });
 });
 
+describe('VoiceController.setAnalyzing()', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('setAnalyzing(true) changes statusBar.text to an analyzing frame', () => {
+        vi.useFakeTimers();
+        const sb = makeMockStatusBar();
+        const vc = makeVc(sb);
+        vc.setAnalyzing(true);
+        expect(sb.text).toMatch(/Senior/);
+        vi.useRealTimers();
+        vc.setAnalyzing(false);
+    });
+
+    it('setAnalyzing(false) restores idle status bar text', () => {
+        vi.useFakeTimers();
+        const sb = makeMockStatusBar();
+        const vc = makeVc(sb);
+        vc.setAnalyzing(true);
+        vi.advanceTimersByTime(1600);
+        vc.setAnalyzing(false);
+        expect(sb.text).toBe('$(radio-tower) Senior');
+        vi.useRealTimers();
+    });
+
+    it('setAnalyzing(false) is a no-op when not analyzing', () => {
+        const sb = makeMockStatusBar();
+        const vc = makeVc(sb);
+        expect(() => vc.setAnalyzing(false)).not.toThrow();
+        expect(sb.text).toBe('');
+    });
+
+    it('does not throw when voice state is active', () => {
+        vi.useFakeTimers();
+        const sb = makeMockStatusBar();
+        const vc = makeVc(sb);
+        expect(() => vc.setAnalyzing(true)).not.toThrow();
+        vc.setAnalyzing(false);
+        vi.useRealTimers();
+    });
+});
+
 // --- helpers ---
 
-function makeVc() {
+function makeVc(statusBar?: vscode.StatusBarItem) {
     return new VoiceController(
         makeMockManager() as any,
-        makeMockStatusBar(),
+        statusBar ?? makeMockStatusBar(),
         makeMockOutput(),
     );
 }

@@ -46,6 +46,7 @@ export class VoiceController {
     private sayProcess: cp.ChildProcess | null = null;
     private asrProcess: cp.ChildProcess | null = null;  // Fix 2: track ASR process
     private lastAnalysis: AnalysisResult | null = null;
+    private analyzingInterval: NodeJS.Timeout | undefined;
 
     constructor(
         private readonly manager: DaemonManager,
@@ -55,6 +56,25 @@ export class VoiceController {
 
     isActive(): boolean {
         return this.state !== 'idle';
+    }
+
+    setAnalyzing(busy: boolean): void {
+        if (busy) {
+            if (this.state !== 'idle') return; // voice active — don't clobber
+            const frames = ['$(sync~spin) Senior', '$(radio-tower) Senior ●', '$(radio-tower) Senior'];
+            let i = 0;
+            this.statusBar.text = frames[0];
+            this.analyzingInterval = setInterval(() => {
+                this.statusBar.text = frames[i % frames.length];
+                i++;
+            }, 400);
+        } else if (this.analyzingInterval !== undefined) {
+            clearInterval(this.analyzingInterval);
+            this.analyzingInterval = undefined;
+            if (this.state === 'idle') {
+                this.statusBar.text = STATUS_ICONS.idle;
+            }
+        }
     }
 
     setLastAnalysis(result: AnalysisResult): void {
@@ -86,6 +106,8 @@ export class VoiceController {
         this.soxProcess = null;
         this.sayProcess = null;
         this.asrProcess = null;
+        clearInterval(this.analyzingInterval);
+        this.analyzingInterval = undefined;
         this.setState('idle');
     }
 

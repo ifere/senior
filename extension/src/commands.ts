@@ -81,6 +81,7 @@ export function registerCommands(
                 isAnalyzing = false;
                 return;
             }
+            voice.setAnalyzing(true);
             panel.setLoading(true);
             try {
                 const diff = await getGitDiff(root);
@@ -107,6 +108,7 @@ export function registerCommands(
             } finally {
                 isAnalyzing = false;
                 panel.setLoading(false);
+                voice.setAnalyzing(false);
             }
         }),
 
