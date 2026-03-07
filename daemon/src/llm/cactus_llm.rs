@@ -111,22 +111,27 @@ impl CactusLlm {
 
         debug!("cactus raw response: {}", raw_json);
 
-        // Parse the cactus response envelope: {"success":true,"response":"..."}
-        let parsed: serde_json::Value = serde_json::from_str(&raw_json)
-            .map_err(|e| anyhow!("failed to parse cactus response JSON: {}: {}", e, raw_json))?;
-
-        if parsed["success"].as_bool() != Some(true) {
-            let err = parsed["error"].as_str().unwrap_or("unknown error");
-            return Err(anyhow!("cactus returned failure: {}", err));
-        }
-
-        let text = parsed["response"]
-            .as_str()
-            .ok_or_else(|| anyhow!("cactus response missing 'response' field: {}", raw_json))?
-            .to_string();
-
-        Ok(text)
+        parse_cactus_response(&raw_json)
     }
+}
+
+/// Parse the cactus response envelope: `{"success":true,"response":"..."}`.
+/// Extracted as a pure function so it can be unit tested without FFI.
+fn parse_cactus_response(raw_json: &str) -> Result<String> {
+    let parsed: serde_json::Value = serde_json::from_str(raw_json)
+        .map_err(|e| anyhow!("failed to parse cactus response JSON: {}: {}", e, raw_json))?;
+
+    if parsed["success"].as_bool() != Some(true) {
+        let err = parsed["error"].as_str().unwrap_or("unknown error");
+        return Err(anyhow!("cactus returned failure: {}", err));
+    }
+
+    let text = parsed["response"]
+        .as_str()
+        .ok_or_else(|| anyhow!("cactus response missing 'response' field: {}", raw_json))?
+        .to_string();
+
+    Ok(text)
 }
 
 impl Drop for CactusLlm {
@@ -141,6 +146,81 @@ impl Drop for CactusLlm {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_valid_envelope_returns_response_text() {
+        let json = r#"{"success":true,"response":"Hello world"}"#;
+        let result = parse_cactus_response(json);
+        assert_eq!(result.unwrap(), "Hello world");
+    }
+
+    #[test]
+    fn parse_envelope_with_extra_fields_returns_response_text() {
+        let json = r#"{"success":true,"response":"hi","confidence":0.85,"tokens":12}"#;
+        let result = parse_cactus_response(json);
+        assert_eq!(result.unwrap(), "hi");
+    }
+
+    #[test]
+    fn parse_failure_envelope_with_error_field() {
+        let json = r#"{"success":false,"error":"out of memory"}"#;
+        let err = parse_cactus_response(json).unwrap_err();
+        assert!(err.to_string().contains("out of memory"), "got: {}", err);
+    }
+
+    #[test]
+    fn parse_failure_envelope_without_error_field_uses_unknown() {
+        let json = r#"{"success":false}"#;
+        let err = parse_cactus_response(json).unwrap_err();
+        assert!(err.to_string().contains("unknown error"), "got: {}", err);
+    }
+
+    #[test]
+    fn parse_success_true_but_missing_response_field_is_error() {
+        let json = r#"{"success":true}"#;
+        let err = parse_cactus_response(json).unwrap_err();
+        assert!(err.to_string().contains("missing 'response' field"), "got: {}", err);
+    }
+
+    #[test]
+    fn parse_response_field_non_string_is_error() {
+        let json = r#"{"success":true,"response":42}"#;
+        let err = parse_cactus_response(json).unwrap_err();
+        assert!(err.to_string().contains("missing 'response' field"), "got: {}", err);
+    }
+
+    #[test]
+    fn parse_invalid_json_returns_parse_error() {
+        let err = parse_cactus_response("not json at all").unwrap_err();
+        assert!(
+            err.to_string().contains("failed to parse cactus response JSON"),
+            "got: {}", err
+        );
+    }
+
+    #[test]
+    fn parse_empty_string_returns_parse_error() {
+        let err = parse_cactus_response("").unwrap_err();
+        assert!(
+            err.to_string().contains("failed to parse cactus response JSON"),
+            "got: {}", err
+        );
+    }
+
+    #[test]
+    fn parse_json_null_is_treated_as_failure() {
+        // null["success"].as_bool() is None, not Some(true) → failure path
+        let err = parse_cactus_response("null").unwrap_err();
+        assert!(err.to_string().contains("cactus returned failure"), "got: {}", err);
+    }
+
+    #[test]
+    fn parse_response_empty_string_is_ok() {
+        // empty string response is valid — caller decides if it's useful
+        let json = r#"{"success":true,"response":""}"#;
+        let result = parse_cactus_response(json);
+        assert_eq!(result.unwrap(), "");
+    }
 
     #[test]
     #[ignore] // Run with: CACTUS_MODEL_PATH=... cargo test -- --ignored
