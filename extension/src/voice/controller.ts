@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import { DaemonManager } from '../daemon/manager';
 import { DaemonClient } from '../daemon/client';
+import { MuteState } from './mute-state';
 
 export interface AnalysisResult {
     summary: string[];
@@ -52,6 +53,7 @@ export class VoiceController {
         private readonly manager: DaemonManager,
         private readonly statusBar: vscode.StatusBarItem,
         private readonly output: vscode.OutputChannel,
+        private readonly muteState: MuteState,
     ) {}
 
     isActive(): boolean {
@@ -79,6 +81,32 @@ export class VoiceController {
 
     setLastAnalysis(result: AnalysisResult): void {
         this.lastAnalysis = result;
+    }
+
+    async autoGreet(workspaceRoot: string): Promise<void> {
+        if (!this.muteState.isEnabled()) return;
+        try {
+            await this._speakDirect('Senior ready.');
+            const diff = await this.getStartupDiff(workspaceRoot);
+            if (!diff.trim()) {
+                await this._speakDirect('Working tree is clean.');
+                return;
+            }
+            const client = new DaemonClient(this.manager.getSocketPath());
+            const response = await client.send<unknown, VoiceAnswer>('greet', {
+                context: diff.slice(0, 2000),
+            });
+            const text = response.type === 'voice_answer'
+                ? response.payload.text
+                : 'Ready. You have uncommitted changes.';
+            await this._speakDirect(text);
+        } catch (e) {
+            this.output.appendLine(`[voice] autoGreet error: ${e}`);
+        }
+    }
+
+    async toggleMute(): Promise<void> {
+        await this.muteState.toggle();
     }
 
     async toggle(): Promise<void> {
@@ -113,6 +141,16 @@ export class VoiceController {
 
     dispose(): void {
         this.stop();
+    }
+
+    private getStartupDiff(workspaceRoot: string): Promise<string> {
+        return new Promise(resolve => {
+            cp.exec(
+                'git diff HEAD --stat',
+                { cwd: workspaceRoot },
+                (_err, stdout) => resolve(stdout ?? ''),
+            );
+        });
     }
 
     private async startLoop(): Promise<void> {

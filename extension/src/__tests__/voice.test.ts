@@ -122,13 +122,77 @@ describe('VoiceController.setAnalyzing()', () => {
     });
 });
 
+describe('VoiceController.autoGreet()', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('does nothing when MuteState.isEnabled() returns false', async () => {
+        const muteState = makeMuteState(false);
+        const vc = makeVc(undefined, muteState);
+        const spawnSpy = vi.mocked(cp.spawn);
+        await vc.autoGreet('/workspace');
+        expect(spawnSpy).not.toHaveBeenCalled();
+    });
+
+    it('speaks greeting and calls say when enabled and workspace root provided', async () => {
+        const muteState = makeMuteState(true);
+        const vc = makeVc(undefined, muteState);
+
+        vi.mocked(cp.exec).mockImplementation((_cmd: string, _opts: any, cb: any) => {
+            cb(null, '', '');
+            return {} as any;
+        });
+
+        const fakeProcess = { on: vi.fn() };
+        vi.mocked(cp.spawn).mockReturnValue(fakeProcess as any);
+        fakeProcess.on.mockImplementation((event: string, cb: Function) => {
+            if (event === 'close' || event === 'exit') cb(0);
+        });
+
+        await vc.autoGreet('/workspace');
+
+        const sayCall = vi.mocked(cp.spawn).mock.calls.find(c => c[0] === 'say');
+        expect(sayCall).toBeDefined();
+    });
+
+    it('does not throw when git command fails', async () => {
+        const muteState = makeMuteState(true);
+        const vc = makeVc(undefined, muteState);
+
+        vi.mocked(cp.exec).mockImplementation((_cmd: string, _opts: any, cb: any) => {
+            cb(new Error('not a git repo'), '', '');
+            return {} as any;
+        });
+        const fakeProcess = { on: vi.fn() };
+        vi.mocked(cp.spawn).mockReturnValue(fakeProcess as any);
+        fakeProcess.on.mockImplementation((event: string, cb: Function) => {
+            if (event === 'close' || event === 'exit') cb(0);
+        });
+
+        await expect(vc.autoGreet('/workspace')).resolves.not.toThrow();
+    });
+});
+
+describe('VoiceController.toggleMute()', () => {
+    it('delegates to MuteState.toggle()', async () => {
+        const muteState = makeMuteState();
+        const vc = makeVc(undefined, muteState);
+        await vc.toggleMute();
+        expect(muteState.toggle).toHaveBeenCalledTimes(1);
+    });
+});
+
 // --- helpers ---
 
-function makeVc(statusBar?: vscode.StatusBarItem) {
+function makeMuteState(enabled = true) {
+    return { isEnabled: vi.fn().mockReturnValue(enabled), toggle: vi.fn() };
+}
+
+function makeVc(statusBar?: vscode.StatusBarItem, muteState?: ReturnType<typeof makeMuteState>) {
     return new VoiceController(
         makeMockManager() as any,
         statusBar ?? makeMockStatusBar(),
         makeMockOutput(),
+        (muteState ?? makeMuteState()) as any,
     );
 }
 
