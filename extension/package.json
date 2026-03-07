@@ -31,6 +31,10 @@
       {
         "command": "senior.speakAnalysis",
         "title": "Senior: Speak Analysis"
+      },
+      {
+        "command": "senior.toggleMute",
+        "title": "Senior: Toggle Mute"
       }
     ],
     "keybindings": [
@@ -69,6 +73,11 @@
           "type": "string",
           "default": "",
           "description": "Path to the STT model weights directory (e.g. moonshine-base). Required for the voice loop (⌘⇧V)."
+        },
+        "senior.autoGreet": {
+          "type": "boolean",
+          "default": true,
+          "description": "Speak a contextual greeting when the extension activates. Can be overridden at runtime with the Senior: Toggle Mute command."
         }
       }
     }

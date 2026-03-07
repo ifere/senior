@@ -3,6 +3,7 @@ import { DaemonManager } from './daemon/manager';
 import { ImpactPanel } from './ui/panel';
 import { registerCommands } from './commands';
 import { VoiceController } from './voice/controller';
+import { MuteState } from './voice/mute-state';
 
 let debounceTimer: NodeJS.Timeout | undefined;
 
@@ -40,8 +41,16 @@ export async function activate(context: vscode.ExtensionContext) {
     statusBar.show();
     context.subscriptions.push(statusBar);
 
-    const voice = new VoiceController(manager, statusBar, output);
+    const muteState = new MuteState(context);
+    const voice = new VoiceController(manager, statusBar, output, muteState);
     context.subscriptions.push(voice);
+
+    // Fire-and-forget: greet the user on startup if not muted.
+    // Never awaited so it doesn't block activation.
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (workspaceRoot) {
+        voice.autoGreet(workspaceRoot);
+    }
 
     registerCommands(context, manager, panel, voice);
 }

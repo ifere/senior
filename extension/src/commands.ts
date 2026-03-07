@@ -116,5 +116,6 @@ export function registerCommands(
         }),
         vscode.commands.registerCommand('senior.voiceToggle', () => voice.toggle()),
         vscode.commands.registerCommand('senior.speakAnalysis', () => voice.speakAnalysis()),
+        vscode.commands.registerCommand('senior.toggleMute', () => voice.toggleMute()),
     );
 }
