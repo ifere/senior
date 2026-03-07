@@ -76,10 +76,6 @@ export function registerCommands(
             const root = workspaceFolders[0].uri.fsPath;
             if (trigger === 'manual') {
                 panel.show();
-            } else if (!panel.isOpen()) {
-                // Auto-save: don't pop open the panel if the user hasn't opened it yet
-                isAnalyzing = false;
-                return;
             }
             voice.setAnalyzing(true);
             panel.setLoading(true);
@@ -99,6 +95,9 @@ export function registerCommands(
                 });
                 if (response.type === 'analysis_result') {
                     panel.setResult(response.payload as any);
+                    if (trigger === 'auto' && !panel.isOpen()) {
+                        panel.show();
+                    }
                     voice.setLastAnalysis(response.payload as any);
                 } else if (response.type === 'error') {
                     panel.setError((response.payload as any).message);

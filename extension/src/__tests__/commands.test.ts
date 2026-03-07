@@ -257,3 +257,54 @@ describe('voice.setLastAnalysis wiring', () => {
         expect(voice.setLastAnalysis).toHaveBeenCalledWith({ summary: 'ok' });
     });
 });
+
+describe('auto-trigger panel auto-open', () => {
+    beforeEach(() => {
+        vscode.workspace.workspaceFolders = [
+            { uri: { fsPath: '/test-ws' } },
+        ] as typeof vscode.workspace.workspaceFolders;
+        Object.keys((vscode.commands as any)._registry).forEach(
+            k => delete (vscode.commands as any)._registry[k]
+        );
+    });
+
+    afterEach(() => { vi.restoreAllMocks(); });
+
+    it('auto trigger opens panel after first result when panel was not open', async () => {
+        vi.mocked(cp.exec).mockImplementation((cmd: string, _opts: any, cb: any) => {
+            if (cmd.includes('rev-parse')) cb(new Error('no parent'), '', '');
+            else cb(null, 'diff --git a/foo.ts b/foo.ts\n--- a/foo.ts\n+++ b/foo.ts\n@@ -1 +1 @@\n-old\n+new\n', '');
+            return {} as any;
+        });
+
+        const panel = makeMockPanel();
+        panel.isOpen.mockReturnValue(false);
+
+        registerCommands(makeContext() as any, makeMockManager() as any, panel as any, makeMockVoice() as any);
+        const handler = (vscode.commands as any)._registry['senior.explainLastChange'];
+
+        await handler('auto');
+
+        expect(panel.show).toHaveBeenCalled();
+        expect(panel.setResult).toHaveBeenCalled();
+    });
+
+    it('auto trigger does not call show() when panel is already open', async () => {
+        vi.mocked(cp.exec).mockImplementation((cmd: string, _opts: any, cb: any) => {
+            if (cmd.includes('rev-parse')) cb(new Error('no parent'), '', '');
+            else cb(null, 'diff --git a/foo.ts b/foo.ts\n--- a/foo.ts\n+++ b/foo.ts\n@@ -1 +1 @@\n-old\n+new\n', '');
+            return {} as any;
+        });
+
+        const panel = makeMockPanel();
+        panel.isOpen.mockReturnValue(true);
+
+        registerCommands(makeContext() as any, makeMockManager() as any, panel as any, makeMockVoice() as any);
+        const handler = (vscode.commands as any)._registry['senior.explainLastChange'];
+
+        await handler('auto');
+
+        expect(panel.show).not.toHaveBeenCalled();
+        expect(panel.setResult).toHaveBeenCalled();
+    });
+});
