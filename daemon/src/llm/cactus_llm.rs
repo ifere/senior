@@ -24,6 +24,8 @@ extern "C" {
 
     fn cactus_destroy(model: *mut c_void);
 
+    fn cactus_reset(model: *mut c_void);
+
     fn cactus_get_last_error() -> *const c_char;
 }
 
@@ -74,10 +76,61 @@ impl CactusLlm {
         });
         let options_c = CString::new(options.to_string())?;
 
+        let raw_json = self.run_complete(messages_c, options_c, std::ptr::null())?;
+        parse_cactus_response(&raw_json)
+    }
+
+    /// Call the model using native function-calling (tools_json + force_tools).
+    /// Returns the `function_calls` array from the cactus response envelope.
+    pub fn complete_with_tools(
+        &self,
+        user_message: &str,
+        tools_json: &str,
+    ) -> Result<Vec<serde_json::Value>> {
+        let messages = serde_json::json!([
+            { "role": "user", "content": user_message }
+        ]);
+        let messages_c = CString::new(messages.to_string())?;
+
+        let options = serde_json::json!({
+            "max_tokens": 512,
+            "temperature": 0.1,
+            "force_tools": true
+        });
+        let options_c = CString::new(options.to_string())?;
+        let tools_c = CString::new(tools_json)?;
+
+        let raw_json = self.run_complete(messages_c, options_c, tools_c.as_ptr())?;
+        debug!("cactus raw response (tools): {}", raw_json);
+
+        let parsed: serde_json::Value = serde_json::from_str(&raw_json)
+            .map_err(|e| anyhow!("failed to parse cactus envelope: {}: {}", e, raw_json))?;
+
+        if parsed["success"].as_bool() != Some(true) {
+            let err = parsed["error"].as_str().unwrap_or("unknown error");
+            return Err(anyhow!("cactus returned failure: {}", err));
+        }
+
+        let calls = parsed["function_calls"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        Ok(calls)
+    }
+
+    fn run_complete(
+        &self,
+        messages_c: CString,
+        options_c: CString,
+        tools_ptr: *const c_char,
+    ) -> Result<String> {
         // 8KB response buffer
         let mut response_buf: Vec<c_char> = vec![0; 8192];
 
         let model = self.model.lock().unwrap();
+        // Clear any cached conversation state from previous calls so each
+        // invocation starts from a fresh context.
+        unsafe { cactus_reset(*model) };
         let ret = unsafe {
             cactus_complete(
                 *model,
@@ -85,7 +138,7 @@ impl CactusLlm {
                 response_buf.as_mut_ptr(),
                 response_buf.len(),
                 options_c.as_ptr(),
-                std::ptr::null(),
+                tools_ptr,
                 None,
                 std::ptr::null_mut(),
             )
@@ -110,8 +163,7 @@ impl CactusLlm {
         };
 
         debug!("cactus raw response: {}", raw_json);
-
-        parse_cactus_response(&raw_json)
+        Ok(raw_json)
     }
 }
 

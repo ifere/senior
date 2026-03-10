@@ -4,9 +4,26 @@ use anyhow::Result;
 use super::diff::DiffFile;
 use tracing::{debug, warn};
 
-const SYSTEM_PROMPT: &str = "You are a code reviewer. Output ONLY a JSON object. No markdown. No explanation. Example output:\n\
-{\"summary\":[\"added input validation\"],\"risk_level\":\"low\",\"risk_reasons\":[],\"suggested_actions\":[{\"label\":\"Add tests\",\"explanation\":\"Cover new validation logic\"}]}\n\
-Rules: risk_level is low, med, or high. summary max 3 items. suggested_actions max 3 items.";
+/// Tool schema for the native function-calling path.
+/// functiongemma is a function-calling model — it won't emit raw JSON prose
+/// but will reliably invoke a named tool with structured arguments.
+const REVIEW_TOOL_JSON: &str = r#"[{
+  "type": "function",
+  "function": {
+    "name": "submit_review",
+    "description": "Submit a concise code review for the given diff",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "summary":          {"type": "array",  "items": {"type": "string"}, "description": "1-3 bullet points describing what changed"},
+        "risk_level":       {"type": "string", "enum": ["low", "med", "high"]},
+        "risk_reasons":     {"type": "array",  "items": {"type": "string"}, "description": "Why this risk level was chosen"},
+        "suggested_actions":{"type": "array",  "items": {"type": "object", "properties": {"label": {"type": "string"}, "explanation": {"type": "string"}}}, "description": "Up to 3 action items"}
+      },
+      "required": ["summary", "risk_level", "risk_reasons", "suggested_actions"]
+    }
+  }
+}]"#;
 
 pub fn build_prompt(files: &[DiffFile], raw_diff: &str) -> String {
     let file_summary: Vec<String> = files
@@ -30,9 +47,63 @@ pub fn build_prompt(files: &[DiffFile], raw_diff: &str) -> String {
 
 pub fn analyze(llm: &CactusLlm, files: &[DiffFile], raw_diff: &str) -> Result<AnalysisResult> {
     let prompt = build_prompt(files, raw_diff);
-    let raw = llm.complete(SYSTEM_PROMPT, &prompt)?;
-    debug!("llm text output: {}", raw);
-    Ok(parse_analysis_json(&raw, files))
+    let calls = llm.complete_with_tools(&prompt, REVIEW_TOOL_JSON)?;
+    debug!("llm function_calls: {:?}", calls);
+    let args = calls
+        .into_iter()
+        .find(|c| c["name"].as_str() == Some("submit_review"))
+        .and_then(|c| c["arguments"].as_object().cloned())
+        .map(|m| serde_json::Value::Object(m))
+        .unwrap_or_else(|| {
+            warn!("model did not call submit_review; using fallback");
+            serde_json::json!({
+                "summary": ["Changes analyzed (no tool call)"],
+                "risk_level": "low",
+                "risk_reasons": [],
+                "suggested_actions": []
+            })
+        });
+    Ok(parse_tool_args(&args, files))
+}
+
+/// Build an AnalysisResult from a parsed tool-call arguments object.
+pub fn parse_tool_args(args: &serde_json::Value, files: &[DiffFile]) -> AnalysisResult {
+    let impacted_files = files
+        .iter()
+        .map(|f| ImpactedFile {
+            path: f.path.clone(),
+            score: normalize_score(f.added_lines + f.removed_lines),
+            why: vec![format!("+{} -{} lines", f.added_lines, f.removed_lines)],
+        })
+        .collect();
+
+    AnalysisResult {
+        summary: args["summary"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .unwrap_or_else(|| vec!["Analysis complete".to_string()]),
+        risk_level: args["risk_level"].as_str().unwrap_or("low").to_string(),
+        risk_reasons: args["risk_reasons"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .unwrap_or_default(),
+        impacted_files,
+        impacted_symbols: vec![],
+        suggested_actions: args["suggested_actions"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| {
+                        Some(SuggestedAction {
+                            label: v["label"].as_str()?.to_string(),
+                            explanation: v["explanation"].as_str().unwrap_or("").to_string(),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        confidence: 0.85,
+    }
 }
 
 /// Parse LLM text output into an AnalysisResult. Pure function — no LLM call, fully testable.
@@ -321,19 +392,59 @@ mod tests {
         assert!(result.impacted_files.is_empty());
     }
 
-    // --- SYSTEM_PROMPT structure ---
+    // --- REVIEW_TOOL_JSON schema structure ---
 
     #[test]
-    fn test_system_prompt_contains_all_risk_level_values() {
-        assert!(SYSTEM_PROMPT.contains("low"),  "prompt must mention 'low'");
-        assert!(SYSTEM_PROMPT.contains("med"),  "prompt must mention 'med'");
-        assert!(SYSTEM_PROMPT.contains("high"), "prompt must mention 'high'");
+    fn test_tool_schema_contains_all_risk_level_values() {
+        assert!(REVIEW_TOOL_JSON.contains("low"),  "tool schema must mention 'low'");
+        assert!(REVIEW_TOOL_JSON.contains("med"),  "tool schema must mention 'med'");
+        assert!(REVIEW_TOOL_JSON.contains("high"), "tool schema must mention 'high'");
     }
 
     #[test]
-    fn test_system_prompt_contains_required_output_keys() {
-        assert!(SYSTEM_PROMPT.contains("risk_level"),       "prompt must include 'risk_level'");
-        assert!(SYSTEM_PROMPT.contains("summary"),          "prompt must include 'summary'");
-        assert!(SYSTEM_PROMPT.contains("suggested_actions"),"prompt must include 'suggested_actions'");
+    fn test_tool_schema_contains_required_output_keys() {
+        assert!(REVIEW_TOOL_JSON.contains("risk_level"),        "schema must include 'risk_level'");
+        assert!(REVIEW_TOOL_JSON.contains("summary"),           "schema must include 'summary'");
+        assert!(REVIEW_TOOL_JSON.contains("suggested_actions"), "schema must include 'suggested_actions'");
+    }
+
+    // --- parse_tool_args ---
+
+    #[test]
+    fn test_parse_tool_args_well_formed() {
+        let files = vec![DiffFile { path: "auth.ts".into(), added_lines: 5, removed_lines: 2, hunks: vec![] }];
+        let args = serde_json::json!({
+            "summary": ["added validation"],
+            "risk_level": "med",
+            "risk_reasons": ["no tests"],
+            "suggested_actions": [{"label": "Add tests", "explanation": "Cover new logic"}]
+        });
+        let result = parse_tool_args(&args, &files);
+        assert_eq!(result.summary, vec!["added validation"]);
+        assert_eq!(result.risk_level, "med");
+        assert_eq!(result.risk_reasons, vec!["no tests"]);
+        assert_eq!(result.suggested_actions.len(), 1);
+        assert_eq!(result.impacted_files.len(), 1);
+        assert_eq!(result.confidence, 0.85);
+    }
+
+    #[test]
+    fn test_parse_tool_args_missing_fields_use_defaults() {
+        let args = serde_json::json!({});
+        let result = parse_tool_args(&args, &[]);
+        assert_eq!(result.summary, vec!["Analysis complete"]);
+        assert_eq!(result.risk_level, "low");
+        assert!(result.risk_reasons.is_empty());
+        assert!(result.suggested_actions.is_empty());
+    }
+
+    #[test]
+    fn test_parse_tool_args_impacted_files_scored_correctly() {
+        let files = vec![
+            DiffFile { path: "big.rs".into(), added_lines: 60, removed_lines: 0, hunks: vec![] },
+        ];
+        let args = serde_json::json!({"summary":[],"risk_level":"high","risk_reasons":[],"suggested_actions":[]});
+        let result = parse_tool_args(&args, &files);
+        assert_eq!(result.impacted_files[0].score, 0.9);
     }
 }
