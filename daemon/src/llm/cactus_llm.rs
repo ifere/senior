@@ -69,7 +69,7 @@ impl CactusLlm {
         let messages_c = CString::new(messages.to_string())?;
 
         let options = serde_json::json!({
-            "max_tokens": 256,
+            "max_tokens": 512,
             "temperature": 0.1
         });
         let options_c = CString::new(options.to_string())?;
