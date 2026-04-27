@@ -4,9 +4,7 @@ use anyhow::Result;
 use super::diff::DiffFile;
 use tracing::{debug, warn};
 
-/// Tool schema for the native function-calling path.
-/// functiongemma is a function-calling model — it won't emit raw JSON prose
-/// but will reliably invoke a named tool with structured arguments.
+/// Tool schema for function-calling mode (no force_tools — model uses fine-tuning to call this).
 const REVIEW_TOOL_JSON: &str = r#"[{
   "type": "function",
   "function": {
@@ -24,6 +22,15 @@ const REVIEW_TOOL_JSON: &str = r#"[{
     }
   }
 }]"#;
+
+/// System prompt for regular (non-tool) completion.
+/// Kept simple — no embedded JSON examples — to avoid confusing the
+/// cactus message parser with unescaped braces inside a string value.
+const SYSTEM_PROMPT: &str = "You are a code reviewer. \
+Output ONLY a valid JSON object with these keys: \
+summary (array of strings), risk_level (low|med|high), \
+risk_reasons (array of strings), suggested_actions (array of objects with label and explanation). \
+No markdown. No prose. Just the JSON object.";
 
 pub fn build_prompt(files: &[DiffFile], raw_diff: &str) -> String {
     let file_summary: Vec<String> = files
@@ -47,23 +54,24 @@ pub fn build_prompt(files: &[DiffFile], raw_diff: &str) -> String {
 
 pub fn analyze(llm: &CactusLlm, files: &[DiffFile], raw_diff: &str) -> Result<AnalysisResult> {
     let prompt = build_prompt(files, raw_diff);
+
+    // Use function-calling mode: the functiongemma model is fine-tuned to emit
+    // <start_function_call>call:submit_review{...}<end_function_call> when tools
+    // are present in the prompt. We do NOT use force_tools (that hangs via
+    // set_tool_constraints). The model naturally invokes the tool via fine-tuning.
     let calls = llm.complete_with_tools(&prompt, REVIEW_TOOL_JSON)?;
-    debug!("llm function_calls: {:?}", calls);
-    let args = calls
-        .into_iter()
-        .find(|c| c["name"].as_str() == Some("submit_review"))
-        .and_then(|c| c["arguments"].as_object().cloned())
-        .map(|m| serde_json::Value::Object(m))
-        .unwrap_or_else(|| {
-            warn!("model did not call submit_review; using fallback");
-            serde_json::json!({
-                "summary": ["Changes analyzed (no tool call)"],
-                "risk_level": "low",
-                "risk_reasons": [],
-                "suggested_actions": []
-            })
-        });
-    Ok(parse_tool_args(&args, files))
+    debug!("tool calls returned: {}", calls.len());
+
+    if let Some(call) = calls.iter().find(|call| call["name"].as_str() == Some("submit_review")) {
+        debug!("tool call args: {:?}", call["arguments"]);
+        return Ok(parse_tool_args(&call["arguments"], files));
+    }
+
+    // Fallback: model didn't produce a function call — try plain text parse.
+    warn!("LLM returned no function calls; trying plain text fallback");
+    let raw = llm.complete(SYSTEM_PROMPT, &prompt)?;
+    debug!("llm text output (fallback): {}", raw);
+    Ok(parse_analysis_json(&raw, files))
 }
 
 /// Build an AnalysisResult from a parsed tool-call arguments object.

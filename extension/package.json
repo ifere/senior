@@ -83,8 +83,8 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p ./ && cp src/ui/panel.html out/ui/panel.html",
-    "watch": "tsc -watch -p ./ && cp src/ui/panel.html out/ui/panel.html",
+    "compile": "mkdir -p out/ui && tsc -p ./ && cp src/ui/panel.html out/ui/panel.html",
+    "watch": "mkdir -p out/ui && cp src/ui/panel.html out/ui/panel.html && tsc -watch -p ./",
     "package": "vsce package --allow-missing-repository",
     "test": "vitest run",
     "test:watch": "vitest",

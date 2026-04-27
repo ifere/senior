@@ -1,4 +1,6 @@
 fn main() {
+    println!("cargo:rustc-check-cfg=cfg(senior_has_cactus)");
+
     let lib_dir = std::env::var("CACTUS_LIB_DIR").unwrap_or_else(|_| {
         println!(
             "cargo:warning=CACTUS_LIB_DIR is not set. \
@@ -8,9 +10,10 @@ fn main() {
         String::new()
     });
     if !lib_dir.is_empty() {
+        println!("cargo:rustc-cfg=senior_has_cactus");
         println!("cargo:rustc-link-search={}", lib_dir);
         println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir);
+        println!("cargo:rustc-link-lib=dylib=cactus");
     }
-    println!("cargo:rustc-link-lib=dylib=cactus");
     println!("cargo:rerun-if-env-changed=CACTUS_LIB_DIR");
 }
