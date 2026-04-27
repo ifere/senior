@@ -80,8 +80,10 @@ impl CactusLlm {
         parse_cactus_response(&raw_json)
     }
 
-    /// Call the model using native function-calling (tools_json + force_tools).
-    /// Returns the `function_calls` array from the cactus response envelope.
+    /// Call the model using native function-calling.
+    /// We intentionally avoid `force_tools` because it can hang on some models;
+    /// instead we rely on the model's tool-calling fine-tune and parse the
+    /// `function_calls` array from the cactus response envelope.
     pub fn complete_with_tools(
         &self,
         user_message: &str,
@@ -95,7 +97,8 @@ impl CactusLlm {
         let options = serde_json::json!({
             "max_tokens": 512,
             "temperature": 0.1,
-            "force_tools": true
+            "confidence_threshold": 0.0,
+            "tool_rag_top_k": 0
         });
         let options_c = CString::new(options.to_string())?;
         let tools_c = CString::new(tools_json)?;
